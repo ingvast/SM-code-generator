@@ -1,0 +1,50 @@
+initial: idle
+
+includes: |
+    #include <stdio.h>
+    int debug_enabled = 1; 
+
+context: |
+    int counter;
+
+hooks:
+  entry: |
+    if(debug_enabled) printf("[TRACE] >> Enter: %s\n", state_full_name);
+  exit:  |
+    if(debug_enabled) printf("[TRACE] << Exit : %s\n", state_full_name);
+
+states:
+  idle:
+    transitions:
+      - test: time > 1.0
+        transfer_to: active
+
+  active:
+    parallel: true
+    
+    # --- THE JOIN ---
+    # We leave 'active' only when BOTH motors are in their 'finished' state
+    transitions:
+      - test: IN_STATE(root_active_m1_finished) && IN_STATE(root_active_m2_finished)
+        transfer_to: idle
+
+    states:
+      m1:
+        initial: run
+        states:
+          run:
+            run: printf("M1 Running...\n");
+            transitions:
+              - test: time > 2.0
+                transfer_to: finished
+          finished: {}
+
+      m2:
+        initial: run
+        states:
+          run:
+            run: printf("M2 Running...\n");
+            transitions:
+              - test: time > 4.0
+                transfer_to: finished
+          finished: {}

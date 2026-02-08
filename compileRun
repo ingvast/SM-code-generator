@@ -1,0 +1,13 @@
+#!/bin/bash
+
+set -e
+
+yaml=$1
+
+exe=${yaml%.yaml}
+
+uv run sm-compiler.py $yaml --lang rust
+
+rustc main.rs -o $exe 
+[ -f $exe ] && ./$exe
+

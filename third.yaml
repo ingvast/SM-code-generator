@@ -1,0 +1,38 @@
+initial: idle
+
+# 1. New: Inject C code at top of file
+includes: |
+    #include <stdio.h>
+    // Global debug flag (could be toggled by main)
+    int debug_enabled = 1; 
+
+context: |
+    int counter;
+
+# 2. New: Hooks for logging
+hooks:
+  entry: |
+    if(debug_enabled) printf("[TRACE] >> Enter: %s\n", state_full_name);
+  exit: |
+    if(debug_enabled) printf("[TRACE] << Exit : %s (Time in state: %.2fs)\n", state_full_name, time);
+
+states:
+  idle:
+    entry: ctx->counter = 0;
+    run: printf("Idling... %.1f\n", time);
+    transitions:
+      - test: time > 1.5 
+        transfer_to: active
+
+  active:
+    initial: boot
+    states:
+      boot:
+        transitions:
+          - test: time > 0.5
+            transfer_to: motor
+
+      motor:
+        transitions:
+          - test: time > 1.0
+            transfer_to: ../idle

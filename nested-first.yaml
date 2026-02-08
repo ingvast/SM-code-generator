@@ -1,0 +1,52 @@
+initial: "idle"
+
+context: |
+    int counter;
+    int temp;
+
+states:
+  idle:
+    entry: |
+        printf("--- Root: Idle ---\n");
+        ctx->counter = 0;
+    exit: printf("    [Idle] Exit\n");
+    transitions:
+      - test: ctx->counter > 10  # Dummy test to show logic
+        transfer_to: active
+      - test: 1                  # Immediate switch for this demo
+        transfer_to: active
+
+  active:
+    # This is a Nested Machine (Composite State)
+    entry: |
+        printf("--- Root: Entered Active Group ---\n");
+    exit: |
+        printf("--- Root: Exited Active Group ---\n");
+    
+    # HISTORY: If true, we resume the last child. If false, we reset to 'initial'.
+    history: true 
+    
+    initial: boot
+    
+    transitions:
+      - test: ctx->temp > 100
+        transfer_to: idle
+
+    # Sub-states live here
+    states:
+      boot:
+        entry: printf("   [Active] Booting hardware...\n");
+        exit: printf("    [Active/boot] Exit\n");
+        transitions:
+          - test: 1
+            transfer_to: motor_run
+
+      motor_run:
+        entry: printf("   [Active] Motor Running\n");
+        exit: printf("    [Active/motor_run] Exit\n");
+        run: |
+            ctx->counter++;
+            printf("   [Active] Motor spins... %d\n", ctx->counter);
+        transitions:
+          - test: ctx->counter == 3
+            transfer_to: ../idle # "..." means go up one level (to root/idle)

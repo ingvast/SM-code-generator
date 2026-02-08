@@ -1,0 +1,55 @@
+initial: idle
+
+# Rust-specific fields
+context: |
+    pub counter: i32,
+    pub active_flag: bool,
+
+# How to initialize the above fields in StateMachine::new()
+context_init: |
+    counter: 0,
+    active_flag: false,
+
+hooks:
+  entry: |
+    println!(">> Enter: {}", state_full_name);
+  exit: |
+    println!("<< Exit : {}", state_full_name);
+
+states:
+  idle:
+    run: |
+      println!("Idling... Time: {:.1}", time);
+    transitions:
+      - test: time > 2.0
+        transfer_to: active
+
+  active:
+    parallel: true
+    transitions:
+       - test: ctx.in_state_root_active_m1_finished() && ctx.in_state_root_active_m2_finished()
+         transfer_to: idle
+
+    states:
+      m1:
+        initial: run
+        states:
+          run:
+            run: println!("M1 Running");
+            transitions:
+              - test: time > 2.0
+                transfer_to: finished
+          finished: {}
+
+      m2:
+        initial: run
+        states:
+          run:
+            run: |
+               println!("M2 Running");
+               ctx.counter += 1; // Example of modifying context
+            
+            transitions:
+              - test: time > 4.0
+                transfer_to: finished
+          finished: {}

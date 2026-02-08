@@ -1,0 +1,32 @@
+initial: "idle"
+
+# Context variables are C variables available to your test/entry/exit code
+context: |
+    int counter;
+    int input_signal;
+
+states:
+  idle:
+    entry: printf("-> Entered Idle\n"); ctx->counter = 0;
+    run: |
+        printf("Counter = %d\n", ctx->counter);
+        ctx->counter++;
+    exit: "printf(\"<- Exiting Idle\\n\");"
+    transitions:
+      - test: "ctx->input_signal == 1"
+        transfer_to: "active"
+
+  active:
+    entry: "printf(\"-> Entered Active\\n\");"
+    # Logic to run repeatedly while in this state
+    run: "ctx->counter++; printf(\"Running... %d\\n\", ctx->counter);"
+    exit: "printf(\"<- Exiting Active\\n\");"
+    transitions:
+      - test: "ctx->counter >= 5"
+        transfer_to: "cooldown"
+
+  cooldown:
+    entry: "printf(\"-> Cooling down\\n\");"
+    transitions:
+      - test: "1" # Always true, immediate transition after entry
+        transfer_to: "idle"

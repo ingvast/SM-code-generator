@@ -1,0 +1,32 @@
+initial: idle
+
+context: |
+    int counter;
+
+states:
+  idle:
+    # Use the new variables
+    entry: printf("-> Entered %s\n", state_name);
+    run: printf("%s for %.1f sec\n", state_name, time);
+    # Transition after 2.5 seconds
+    transitions:
+      - test: time > 2.5 
+        transfer_to: active
+
+  active:
+    initial: boot
+    states:
+      boot:
+        entry: printf("Booting...\n");
+        transitions:
+          - test: time > 1.0
+            transfer_to: motor
+
+      motor:
+        # Use 'state_full_name' for debugging
+        entry: |
+            printf("DEBUG: %s started\n", state_full_name);
+        run: printf("Motor running for %.1f sec\n", time);
+        transitions:
+          - test: time > 3.0
+            transfer_to: ../idle   # Note the new '..' syntax

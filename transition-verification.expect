@@ -1,0 +1,295 @@
+--- Starting Rust State Machine ---
+00: Entry: /
+System Start
+00: Entry: /run
+00: Entry: /run/a
+/run/a
+00: Running: /
+00: Running: /run
+00: Running: /run/a
+01: /run/a
+01: Running: /
+01: Running: /run
+01: Running: /run/a
+01: Transition from /run/a to /run/b
+First transiton
+01: Exit: /run/a
+01: Entry: /run/b
+02: /run/b
+02: Running: /
+02: Running: /run
+02: Running: /run/b
+02: Transition from /run/b to /run/a
+02: Exit: /run/b
+02: Entry: /run/a
+03: /run/a
+03: Running: /
+03: Running: /run
+03: Running: /run/a
+03: Transition from /run/a to /run/c
+03: Exit: /run/a
+03: Entry: /run/c
+03: Entry: /run/c/d
+04: /run/c/d
+04: Running: /
+04: Running: /run
+04: Running: /run/c
+04: Running: /run/c/d
+04: Transition from /run/c/d to /run
+04: Exit: /run/c/d
+04: Exit: /run/c
+04: Entry: /run
+04: Entry: /run/a
+05: /run/a
+05: Running: /
+05: Running: /run
+05: Running: /run/a
+05: Transition from /run/a to /run/c/d
+05: Exit: /run/a
+05: Entry: /run/c
+05: Entry: /run/c/d
+06: /run/c/d
+06: Running: /
+06: Running: /run
+06: Running: /run/c
+06: Running: /run/c/d
+06: Transition from /run/c/d to /run/c/d
+06: Exit: /run/c/d
+06: Entry: /run/c/d
+07: /run/c/d
+07: Running: /
+07: Running: /run
+07: Running: /run/c
+07: Running: /run/c/d
+07: Transition from /run/c/d to /run/c/e
+07: Exit: /run/c/d
+07: Entry: /run/c/e
+07: Entry: /run/c/e/f
+08: /run/c/e/f
+08: Running: /
+08: Running: /run
+08: Transition from /run to /run/d
+08: Exit: /run/c/e/f
+08: Exit: /run/c/e
+08: Exit: /run/c
+08: Entry: /run/d
+08: Entry: /run/d/a
+09: /run/d/a
+09: Running: /
+09: Running: /run
+09: Running: /run/d
+09: Running: /run/d/a
+09: Transition from /run/d/a to /run/d/b
+09: Exit: /run/d/a
+09: Entry: /run/d/b
+10: /run/d/b
+10: Running: /
+10: Running: /run
+10: Running: /run/d
+10: Running: /run/d/b
+10: Transition from /run/d/b to /run/a
+10: Exit: /run/d/b
+10: Exit: /run/d
+10: Entry: /run/a
+11: /run/a
+11: Running: /
+11: Running: /run
+11: Running: /run/a
+11: Transition from /run/a to /run/d
+Testing history
+11: Exit: /run/a
+11: Entry: /run/d
+11: Entry: /run/d/b
+12: /run/d/b
+12: Running: /
+12: Running: /run
+12: Running: /run/d
+12: Running: /run/d/b
+12: Transition from /run/d/b to /run/g
+Testing parallel
+12: Exit: /run/d/b
+12: Exit: /run/d
+12: Entry: /run/g
+12: Entry: /run/g/a
+12: Entry: /run/g/a/a
+12: Entry: /run/g/b
+12: Entry: /run/g/b/b
+13: /run/g/[a/a,b/b]
+13: Running: /
+13: Running: /run
+13: Running: /run/g
+13: Running: /run/g/a
+13: Running: /run/g/a/a
+13: Running: /run/g/b
+13: Running: /run/g/b/b
+13: Transition from /run/g/b/b to /run/g/b/c
+13: Exit: /run/g/b/b
+13: Entry: /run/g/b/c
+14: /run/g/[a/a,b/c]
+14: Running: /
+14: Running: /run
+14: Running: /run/g
+14: Running: /run/g/a
+14: Running: /run/g/a/a
+14: Transition from /run/g/a/a to /run/g/a/b
+14: Exit: /run/g/a/a
+14: Entry: /run/g/a/b
+15: /run/g/[a/b,b/c]
+15: Running: /
+15: Running: /run
+15: Running: /run/g
+15: Running: /run/g/a
+15: Running: /run/g/a/b
+15: Transition from /run/g/a/b to /run/a
+15: Exit: /run/g/a/b
+15: Exit: /run/g/a
+15: Exit: /run/g/b/c
+15: Exit: /run/g/b
+15: Exit: /run/g
+15: Entry: /run/a
+16: /run/a
+16: Running: /
+16: Running: /run
+16: Running: /run/a
+16: Transition from /run/a to /run/g
+16: Exit: /run/a
+16: Entry: /run/g
+16: Entry: /run/g/a
+16: Entry: /run/g/a/a
+16: Entry: /run/g/b
+16: Entry: /run/g/b/b
+17: /run/g/[a/a,b/b]
+17: Running: /
+17: Running: /run
+17: Running: /run/g
+17: Running: /run/g/a
+17: Running: /run/g/a/a
+17: Running: /run/g/b
+17: Running: /run/g/b/b
+17: Transition from /run/g/b/b to /run/g/b/c
+17: Exit: /run/g/b/b
+17: Entry: /run/g/b/c
+18: /run/g/[a/a,b/c]
+18: Running: /
+18: Running: /run
+18: Running: /run/g
+18: Running: /run/g/a
+18: Running: /run/g/a/a
+18: Transition from /run/g/a/a to /run/g/a/b
+18: Exit: /run/g/a/a
+18: Entry: /run/g/a/b
+19: /run/g/[a/b,b/c]
+19: Running: /
+19: Running: /run
+19: Transition from /run to /run/a
+19: Exit: /run/g/a/b
+19: Exit: /run/g/a
+19: Exit: /run/g/b/c
+19: Exit: /run/g/b
+19: Exit: /run/g
+19: Entry: /run/a
+20: /run/a
+20: Running: /
+20: Running: /run
+20: Running: /run/a
+20: Transition from /run/a to /run/g['a/b', 'b/a']
+20: Exit: /run/a
+20: Entry: /run/g
+20: Entry: /run/g/a
+20: Entry: /run/g/a/b
+20: Entry: /run/g/b
+20: Entry: /run/g/b/a
+21: /run/g/[a/b,b/a]
+21: Running: /
+21: Running: /run
+21: Running: /run/g
+21: Running: /run/g/a
+21: Running: /run/g/a/b
+21: Transition from /run/g/a/b to /run/a
+21: Exit: /run/g/a/b
+21: Exit: /run/g/a
+21: Exit: /run/g/b/a
+21: Exit: /run/g/b
+21: Exit: /run/g
+21: Entry: /run/a
+22: /run/a
+22: Running: /
+22: Running: /run
+22: Running: /run/a
+22: Transition from /run/a to /run/g/a/b
+22: Exit: /run/a
+22: Entry: /run/g
+22: Entry: /run/g/a
+22: Entry: /run/g/a/b
+22: Entry: /run/g/b
+22: Entry: /run/g/b/b
+23: /run/g/[a/b,b/b]
+23: Running: /
+23: Running: /run
+23: Running: /run/g
+23: Running: /run/g/a
+23: Running: /run/g/a/b
+23: Transition from /run/g/a/b to /run/g/b/c
+23: Exit: /run/g/b/b
+23: Entry: /run/g/b/c
+24: /run/g/[a/b,b/c]
+24: Running: /
+24: Running: /run
+24: Running: /run/g
+24: Running: /run/g/a
+24: Running: /run/g/a/b
+24: Running: /run/g/b
+24: Running: /run/g/b/c
+24: Transition from /run/g/b/c to /run/h
+Trying a descision tree
+24: Exit: /run/g/b/c
+24: Exit: /run/g/b
+24: Exit: /run/g/a/b
+24: Exit: /run/g/a
+24: Exit: /run/g
+24: Entry: /run/h
+24: Entry: /run/h/a
+25: /run/h/a
+25: Running: /
+25: Running: /run
+25: Running: /run/h
+25: Running: /run/h/a
+25: Transition from /run/h/a to /run/h/b
+25: Exit: /run/h/a
+25: Entry: /run/h/b
+26: /run/h/b
+26: Running: /
+26: Running: /run
+26: Running: /run/h
+26: Running: /run/h/b
+26: Transition from /run/h/b to /run/h/a
+26: Exit: /run/h/b
+26: Entry: /run/h/a
+27: /run/h/a
+27: Running: /
+27: Running: /run
+27: Running: /run/h
+27: Running: /run/h/a
+27: Transition from /run/h/a to /run/h/c
+27: Exit: /run/h/a
+27: Entry: /run/h/c
+28: /run/h/c
+28: Running: /
+28: Running: /run
+28: Running: /run/h
+28: Running: /run/h/c
+28: Transition from /run/h/c to /run/h/b
+28: Exit: /run/h/c
+28: Entry: /run/h/b
+29: /run/h/b
+29: Running: /
+29: Running: /run
+29: Running: /run/h
+29: Running: /run/h/b
+29: Transition from /run/h/b to Termination
+29: Exit: /run/h/b
+29: Exit: /run/h
+29: Exit: /run
+29: Exit: /
+Done
+30: FINISHED

@@ -1,0 +1,305 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{hyperref}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{titlesec}
+\usepackage{float}
+
+% Geometry settings
+\geometry{left=25mm, right=25mm, top=25mm, bottom=25mm}
+
+% Color definitions
+\definecolor{yamlkey}{rgb}{0.0, 0.0, 0.6}
+\definecolor{yamlval}{rgb}{0.0, 0.4, 0.0}
+\definecolor{comment}{rgb}{0.5, 0.5, 0.5}
+\definecolor{bg}{rgb}{0.96, 0.96, 0.96}
+\definecolor{rustfunc}{rgb}{0.3, 0.1, 0.5}
+
+% Listings setup for YAML
+\lstdefinelanguage{YAML}{
+  keywords={states, initial, transitions, guard, action, to, do, entry, exit, orthogonal, hooks, decisions, context},
+  keywordstyle=\color{yamlkey}\bfseries,
+  ndkeywords={true, false, null},
+  ndkeywordstyle=\color{yamlval}\bfseries,
+  identifierstyle=\color{black},
+  sensitive=false,
+  comment=[l]{\#},
+  commentstyle=\color{comment}\ttfamily,
+  stringstyle=\color{yamlval}\ttfamily,
+  morestring=[b]',
+  morestring=[b]",
+  backgroundcolor=\color{bg},
+  frame=single,
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  captionpos=b
+}
+
+% Listings setup for Rust
+\lstdefinelanguage{Rust}{
+  keywords={fn, pub, struct, impl, let, mut, if, else, match, return, bool, f64, u32},
+  keywordstyle=\color{blue}\bfseries,
+  ndkeywords={Context, StateMachine, Some, None},
+  ndkeywordstyle=\color{rustfunc}\bfseries,
+  comment=[l]{//},
+  commentstyle=\color{comment}\ttfamily,
+  stringstyle=\color{yamlval}\ttfamily,
+  backgroundcolor=\color{bg},
+  frame=single,
+  basicstyle=\ttfamily\small,
+  captionpos=b
+}
+
+% Listings setup for Bash
+\lstdefinelanguage{Bash}{
+  keywords={python3},
+  keywordstyle=\color{blue}\bfseries,
+  backgroundcolor=\color{bg},
+  frame=single,
+  basicstyle=\ttfamily\small,
+  captionpos=b
+}
+
+\title{\textbf{State Machine Generator \\ User Manual}}
+\author{System Documentation}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Overview}
+This tool generates a safety-critical Hierarchical State Machine (HSM) in Rust from a YAML definition. It supports advanced features like orthogonal regions (parallelism), history patterns, and complex decision trees.
+
+\section{Generating the Code}
+The generator is a Python script (\texttt{sm-compiler.py}) that validates your model and produces Rust code.
+
+\begin{lstlisting}[language=Bash, caption=Command Line Usage]
+# Basic Usage
+python3 sm-compiler.py model.yaml
+
+# Specify Output Language (Default is Rust)
+python3 sm-compiler.py model.yaml --lang rust
+\end{lstlisting}
+
+\subsection{Outputs}
+\begin{itemize}
+    \item \texttt{statemachine.rs}: The complete Rust implementation.
+    \item \texttt{statemachine.dot}: A Graphviz visualization of your logic.
+\end{itemize}
+
+\section{Integration \& API}
+
+\subsection{The Main Loop}
+The generated code provides a \texttt{StateMachine} struct. You must initialize it and call \texttt{tick()} cyclically.
+
+\begin{lstlisting}[language=Rust, caption={Example main.rs}]
+mod statemachine;
+use statemachine::StateMachine;
+
+fn main() {
+    let mut sm = StateMachine::new();
+
+    // Initialize inputs (accessing public context)
+    sm.ctx.counter = 0;
+
+    // Execution Loop
+    while sm.is_running() {
+        // 1. Advance logical time (if using timers)
+        sm.ctx.now += 0.1;
+        
+        // 2. Run logic
+        sm.tick();
+        
+        // 3. Debug Output
+        println!("Current State: {}", sm.get_state_str());
+        
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+\end{lstlisting}
+
+\subsection{Public API Methods}
+These methods are available on the \texttt{StateMachine} instance (\texttt{sm}) or its context (\texttt{ctx}).
+
+\begin{longtable}{@{}llp{8cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Location} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{tick()} & \texttt{sm} & Executes one cycle of logic (Do-activities \& Transitions). \\
+\texttt{is\_running()} & \texttt{sm} & Returns \texttt{false} if the machine has terminated. \\
+\texttt{get\_state\_str()} & \texttt{sm} & Returns a string representation (e.g., \texttt{/run/active}). \\
+\texttt{in\_state\_X()} & \texttt{ctx} & Returns \texttt{true} if state \texttt{X} is currently active. \\
+\bottomrule
+\end{longtable}
+
+\section{Writing Logic: Handlers vs. Hooks}
+
+\subsection{Local Handlers (Per State/Transition)}
+These are defined inside specific states or transitions in the YAML. They apply only to that specific element.
+
+\begin{itemize}
+    \item \textbf{\texttt{entry}}: Runs once when entering the specific state.
+    \item \textbf{\texttt{do}}: Runs every tick while in the specific state.
+    \item \textbf{\texttt{exit}}: Runs once when leaving the specific state.
+    \item \textbf{\texttt{action}}: Runs during a specific transition (see Section 5).
+\end{itemize}
+
+\subsection{Global Hooks (System-wide)}
+Hooks are defined at the root level under the \texttt{hooks:} key. They allow you to inject code into \textbf{every} occurrence of an event type across the entire machine (e.g., for logging).
+
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+\textbf{Hook Key} & \textbf{Trigger Event} \\
+\midrule
+\endhead
+\texttt{hooks: entry} & Injected into \textbf{all} states' entry handlers. \\
+\texttt{hooks: do} & Injected into \textbf{all} states' do handlers. \\
+\texttt{hooks: exit} & Injected into \textbf{all} states' exit handlers. \\
+\texttt{hooks: transition} & Injected into \textbf{all} transitions (equivalent to a global Action). \\
+\bottomrule
+\end{longtable}
+
+\textbf{Note:} There is no \texttt{hooks: action}. Use \texttt{hooks: transition} instead.
+
+\subsection{Available Variables in Code Blocks}
+The following variables are injected into the scope of your Rust snippets:
+
+\begin{longtable}{@{}lllp{6cm}@{}}
+\toprule
+\textbf{Variable} & \textbf{Type} & \textbf{Scope} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{ctx} & \texttt{\&mut Context} & All & The shared context struct holding your data. \\
+\texttt{time} & \texttt{f64} & All & Time elapsed (seconds) since entering the current state. \\
+\texttt{t\_src} & \texttt{\&str} & Action/Trans. & The full path of the state being left. \\
+\texttt{t\_dst} & \texttt{\&str} & Action/Trans. & The full path of the target state. \\
+\bottomrule
+\end{longtable}
+
+\section{Transitions}
+A transition determines how the machine moves.
+
+\subsection{Using Actions (The Mealy Aspect)}
+The \texttt{action} keyword allows you to execute code \textit{during} the transition, before the old state is exited.
+
+\begin{lstlisting}[language=YAML, caption={Example using Action variables}]
+states:
+  reading:
+    transitions:
+      - guard: ctx.value > 100
+        # This code runs BEFORE reading exits
+        action: |
+          println!("Moving {} -> {}", t_src, t_dst);
+          ctx.log_alert("Threshold Exceeded");
+        to: alert_mode
+\end{lstlisting}
+
+\subsection{Path Syntax}
+The \texttt{to:} keyword supports several addressing modes:
+
+\begin{itemize}
+    \item \textbf{\texttt{/absolute/path}}: Starts from the root. Use for long jumps.
+    \item \textbf{\texttt{sibling}}: Looks for a state in the same parent.
+    \item \textbf{\texttt{./child}}: Looks for a direct child of the current state.
+    \item \textbf{\texttt{../uncle}}: Moves up one level, then finds a sibling.
+    \item \textbf{\texttt{.}}: \textbf{Self-Transition}. The state exits and immediately re-enters.
+\end{itemize}
+
+\subsection{Transition Scenarios}
+
+\subsubsection*{Lateral (Sibling to Sibling)}
+\begin{itemize}
+    \item \textbf{Exits:} A
+    \item \textbf{Enters:} B
+\end{itemize}
+
+\subsubsection*{Drill Down (Parent to Child)}
+\begin{itemize}
+    \item \textbf{Exits:} None (P remains active).
+    \item \textbf{Enters:} C
+\end{itemize}
+
+\subsubsection*{Move Up (Child to Parent/Uncle)}
+\begin{itemize}
+    \item \textbf{Exits:} C
+    \item \textbf{Exits:} Parent P.
+    \item \textbf{Enters:} U
+\end{itemize}
+
+\section{Orthogonal States (Parallelism)}
+An orthogonal state runs multiple child regions simultaneously.
+\textbf{Keyword:} \texttt{orthogonal: true}
+
+\subsection{Fork Transitions (Drilling Down)}
+You can enter an orthogonal state by targeting its children directly.
+
+\begin{enumerate}
+    \item \textbf{Implicit Fork:} \texttt{to: /run/g/a/sub\_state} \\
+    The generator forces region \texttt{a} to \texttt{sub\_state}. Other regions start normally.
+    \item \textbf{Explicit Fork:} \texttt{to: /run/g/[a/sub\_state, b/other]} \\
+    Explicitly sets the target for multiple regions at once.
+\end{enumerate}
+
+\subsection{Joining (Synchronization)}
+To "join" parallel states, transition from the \textbf{Parent} based on the status of the \textbf{Children}.
+
+\begin{lstlisting}[language=YAML]
+# Parent State
+main_task:
+  orthogonal: true
+  states:
+    A:
+      states:
+        working:
+          transitions:
+            - guard: done
+              to: finished
+        finished: {} # Idle wait state
+    B:
+      # ... similar logic ...
+  
+  # Transition on the Parent Container
+  transitions:
+    - guard: ctx.in_state_A_finished() && ctx.in_state_B_finished()
+      to: next_step
+\end{lstlisting}
+
+\section{Decisions (Logic Trees)}
+Decisions allow you to externalize branching logic. A decision node can point to states, or \textbf{chain to other decisions}.
+
+\textbf{Restriction:} You cannot use \texttt{action} or \texttt{hooks} inside a decision block. Actions must be placed on the transition \textit{leading to} the decision, or on the state transitions following it.
+
+\textbf{1. Define the Decision (Root Level):}
+\begin{lstlisting}[language=YAML]
+decisions:
+  validate_input:
+    - guard: ctx.input < 0
+      to: /error/negative
+    - guard: ctx.input > 100
+      to: check_permissions # Chaining to another decision
+    - to: /process/calc     # Default
+
+  check_permissions:
+    - guard: ctx.is_admin
+      to: /admin/override
+    - to: /error/denied
+\end{lstlisting}
+
+\textbf{2. Use the Decision:}
+\begin{lstlisting}[language=YAML]
+transitions:
+  - guard: ctx.data_ready
+    to: validate_input
+\end{lstlisting}
+
+\end{document}
