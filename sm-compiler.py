@@ -71,11 +71,14 @@ def validate_model(data):
                 continue
             
             raw_target = t['to']
-            
+
             if raw_target is None or raw_target == "null":
                 continue
 
-            if raw_target in data.get('decisions', {}):
+            if isinstance(raw_target, str) and raw_target.startswith('@'):
+                decision_name = raw_target[1:]
+                if decision_name not in data.get('decisions', {}):
+                    errors.append(f"State '{display_name}', transition #{i+1}: Decision '@{decision_name}' does not exist.")
                 continue
 
             base_target, forks = parse_fork_target(raw_target)

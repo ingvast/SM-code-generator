@@ -156,17 +156,19 @@ def generate_dot_recursive(name_path, data, node_lines, edge_lines, composite_id
             # Termination node visualization could go here
             continue
 
-        base_str, _ = parse_fork_target(target_str)
-        
-        is_decision = target_str in decisions
-        target_path = resolve_target_path(name_path, base_str)
-        target_id = get_graph_id(target_path)
-        
+        is_decision = isinstance(target_str, str) and target_str.startswith('@')
+        decision_name = target_str[1:] if is_decision else None
+
+        if not is_decision:
+            base_str, _ = parse_fork_target(target_str)
+            target_path = resolve_target_path(name_path, base_str)
+            target_id = get_graph_id(target_path)
+
         src = f"{my_id}_start" if is_composite else my_id
         ltail = f"ltail=cluster_{my_id}" if is_composite else ""
-        
+
         if is_decision:
-            tgt = get_graph_id(['root', target_str]) if target_str in decisions else target_str
+            tgt = get_graph_id(['root', decision_name])
             lhead = ""
         else:
             tgt = f"{target_id}_start" if target_id in composite_ids else target_id
@@ -206,12 +208,18 @@ def generate_dot(root_data, decisions):
         for t in transitions:
             target_str = t.get('to')
             if target_str is None: continue
-            
-            base_str, _ = parse_fork_target(target_str)
-            target_path = resolve_target_path(['root', name], base_str) 
-            target_id = get_graph_id(target_path)
-            tgt_node = f"{target_id}_start" if target_id in composite_ids else target_id
-            lhead = f"lhead=cluster_{target_id}" if target_id in composite_ids else ""
+
+            is_dec_ref = isinstance(target_str, str) and target_str.startswith('@')
+            if is_dec_ref:
+                dec_ref_name = target_str[1:]
+                tgt_node = get_graph_id(['root', dec_ref_name])
+                lhead = ""
+            else:
+                base_str, _ = parse_fork_target(target_str)
+                target_path = resolve_target_path(['root', name], base_str)
+                target_id = get_graph_id(target_path)
+                tgt_node = f"{target_id}_start" if target_id in composite_ids else target_id
+                lhead = f"lhead=cluster_{target_id}" if target_id in composite_ids else ""
             
             # Label logic for decisions
             raw_guard = t.get('guard', '')

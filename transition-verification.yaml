@@ -172,7 +172,7 @@ states:
             - guard: ctx.counter == 26
               to: a
             - guard: ctx.counter > 26
-              to: d2
+              to: "@d2"
           d2:
             - guard: ctx.counter == 27
               to: c
@@ -181,15 +181,15 @@ states:
         states:
           a:
             transitions:
-              - to: d1
+              - to: "@d1"
           b:
             transitions:
-              - to: d1
+              - to: "@d1"
               - guard: ctx.counter == 29
                 to: null
           c:
             transitions:
-              - to: d1
+              - to: "@d1"
 
   error:
     entry: //

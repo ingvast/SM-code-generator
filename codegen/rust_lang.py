@@ -281,11 +281,14 @@ class RustGenerator:
         dst_str = "???"
         is_termination = False
         
+        is_decision = isinstance(raw_target, str) and raw_target.startswith('@')
+        decision_name = raw_target[1:] if is_decision else None
+
         if raw_target is None or raw_target == "null" or raw_target == "":
             dst_str = "Termination"
             is_termination = True
-        elif raw_target in self.decisions:
-            dst_str = f"Decision({raw_target})" 
+        elif is_decision:
+            dst_str = f"Decision({decision_name})"
         else:
             base_target, forks = parse_fork_target(raw_target)
             target_path = resolve_target_path(name_path, base_target)
@@ -295,7 +298,7 @@ class RustGenerator:
                 dst_str = "/" + "/".join(target_path[1:])
 
         hook_code = self.hooks.get('transition', '')
-        if raw_target not in self.decisions:
+        if not is_decision:
              code += f'{indent}    let t_src = "{src_str}";\n'
              code += f'{indent}    let t_dst = "{dst_str}";\n'
              if hook_code:
@@ -316,8 +319,8 @@ class RustGenerator:
             code += f"{indent}    ctx.terminated = true;\n"
             code += f"{indent}    return;\n"
 
-        elif raw_target in self.decisions:
-            decision_rules = self.decisions[raw_target]
+        elif is_decision:
+            decision_rules = self.decisions[decision_name]
             for rule in decision_rules:
                 code += self.emit_transition_logic(name_path, rule, indent_level + 1)
         else:
