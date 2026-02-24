@@ -121,7 +121,7 @@ def validate_model(data):
         sys.exit(1)
     print("Model OK.")
 
-SUPPORTED_LANGS = ['c', 'rust']
+SUPPORTED_LANGS = ['c', 'rust', 'python']
 
 
 def generate_lang(lang, data, output_base):
@@ -152,6 +152,15 @@ def generate_lang(lang, data, output_base):
         rs_path = output_base + ".rs"
         with open(rs_path, "w") as f: f.write(source)
         print(f" -> {rs_path} created.")
+
+    elif lang == 'python':
+        from codegen.python_lang import PythonGenerator
+        print("Generating Python code...")
+        gen = PythonGenerator(data)
+        source, _ = gen.generate()
+        py_path = output_base + ".py"
+        with open(py_path, "w") as f: f.write(source)
+        print(f" -> {py_path} created.")
 
     else:
         print(f"WARNING: Unknown language '{lang}', skipping.")

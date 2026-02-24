@@ -21,6 +21,13 @@ class BaseGenerator(ABC):
     COMPOSITE_AND_TEMPLATE = None
     INSPECTOR_TEMPLATE = None
 
+    # Language syntax constants (override in subclasses)
+    STMT_END = ";"        # Statement terminator (Python: "")
+    BLOCK_CLOSE = "}"     # Block closing token (Python: "")
+    TRUE_LIT = "true"     # Boolean true literal (Python: "True")
+    FALSE_LIT = "false"   # Boolean false literal (Python: "False")
+    COMMENT = "//"        # Line comment prefix (Python: "#")
+
     def __init__(self, data):
         self.data = data
         self.state_counter = 0
@@ -109,6 +116,20 @@ class BaseGenerator(ABC):
         """Check function pointer equality in inspector. Default: Rust syntax."""
         return f"ctx.{ptr}.map(|f| f as usize) == Some({fn_name} as usize)"
 
+    def fmt_elif_open(self, cond):
+        """Format an else-if opening. Default: Rust syntax."""
+        return f"else if {cond} {{"
+
+    # Separator between lines in multi-line template values (e.g. set_parent).
+    # Rust/C use "\n    " to add indentation; Python uses "\n" since
+    # format_template handles indentation.
+    LINE_SEP = "\n    "
+
+    def format_template(self, template, **kwargs):
+        """Format a template string with the given kwargs.
+        Override in subclasses for indent-aware formatting (e.g. Python)."""
+        return template.format(**kwargs)
+
     # --- End syntax hooks ---
 
     def _fmt_func(self, path):
@@ -125,9 +146,9 @@ class BaseGenerator(ABC):
             'initial': self.data['initial'],
             'states': self.data['states'],
             'history': False,
-            'entry': self.data.get('entry', '// Root Entry'),
-            'do': self.data.get('do', '// Root Do'),
-            'exit': self.data.get('exit', '// Root Exit')
+            'entry': self.data.get('entry', f'{self.COMMENT} Root Entry'),
+            'do': self.data.get('do', f'{self.COMMENT} Root Do'),
+            'exit': self.data.get('exit', f'{self.COMMENT} Root Exit')
         }
 
         self.recurse(['root'], root_data, None)
@@ -150,8 +171,8 @@ class BaseGenerator(ABC):
         raw_target = t.get('to')
 
         test_val = t.get('guard', True)
-        if test_val is True: test_cond = "true"
-        elif test_val is False: test_cond = "false"
+        if test_val is True: test_cond = self.TRUE_LIT
+        elif test_val is False: test_cond = self.FALSE_LIT
         else: test_cond = str(test_val)
 
         test_cond = self.fmt_guard_expand(test_cond)
@@ -186,7 +207,7 @@ class BaseGenerator(ABC):
                  formatted_hook = "\n".join([f"{indent}    {line}" for line in hook_code.splitlines()])
                  code += formatted_hook + "\n"
 
-        code += f"{indent}    {self.fmt_set_flag('transition_fired', 'true')}\n"
+        code += f"{indent}    {self.fmt_set_flag('transition_fired', self.TRUE_LIT)}\n"
 
         action_code = t.get('action')
         if action_code:
@@ -195,10 +216,10 @@ class BaseGenerator(ABC):
 
         if is_termination:
             exit_funcs = get_exit_sequence(name_path, ['root'], self._fmt_func)
-            code += "".join([f"{indent}    {fn}(ctx);\n" for fn in exit_funcs])
-            code += f"{indent}    state_root_exit(ctx);\n"
-            code += f"{indent}    {self.fmt_set_flag('terminated', 'true')}\n"
-            code += f"{indent}    return;\n"
+            code += "".join([f"{indent}    {fn}(ctx){self.STMT_END}\n" for fn in exit_funcs])
+            code += f"{indent}    state_root_exit(ctx){self.STMT_END}\n"
+            code += f"{indent}    {self.fmt_set_flag('terminated', self.TRUE_LIT)}\n"
+            code += f"{indent}    return{self.STMT_END}\n"
 
         elif is_decision:
             decision_rules = self.decisions[decision_name]
@@ -244,17 +265,18 @@ class BaseGenerator(ABC):
                         # 3. Entry Sequence
                         if forks is None:
                              entry_funcs = get_entry_sequence(entry_source, target_path, self._fmt_entry)
-                             code += "".join([f"{indent}    {fn}(ctx);\n" for fn in entry_funcs])
+                             code += "".join([f"{indent}    {fn}(ctx){self.STMT_END}\n" for fn in entry_funcs])
                         else:
                              def _fmt_entry_forced_start(path, suffix):
                                 if path == target_path:
                                     return "state_" + flatten_name(path, "_") + "_start"
                                 return "state_" + flatten_name(path, "_") + suffix
                              entry_funcs = get_entry_sequence(entry_source, target_path, _fmt_entry_forced_start)
-                             code += "".join([f"{indent}    {fn}(ctx);\n" for fn in entry_funcs])
+                             code += "".join([f"{indent}    {fn}(ctx){self.STMT_END}\n" for fn in entry_funcs])
 
-                        code += f"{indent}    return;\n"
-                        code += f"{indent}}}\n"
+                        code += f"{indent}    return{self.STMT_END}\n"
+                        if self.BLOCK_CLOSE:
+                            code += f"{indent}{self.BLOCK_CLOSE}\n"
                         return code
 
             # --- IMPLICIT ORTHOGONAL / LOCAL LIMB LOGIC ---
@@ -291,11 +313,11 @@ class BaseGenerator(ABC):
 
             # --- Standard Exit Sequence ---
             exit_funcs = get_exit_sequence(name_path, target_path, self._fmt_func)
-            code += "".join([f"{indent}    {fn}(ctx);\n" for fn in exit_funcs])
+            code += "".join([f"{indent}    {fn}(ctx){self.STMT_END}\n" for fn in exit_funcs])
 
             if forks is None:
                 entry_funcs = get_entry_sequence(name_path, target_path, self._fmt_entry)
-                code += "".join([f"{indent}    {fn}(ctx);\n" for fn in entry_funcs])
+                code += "".join([f"{indent}    {fn}(ctx){self.STMT_END}\n" for fn in entry_funcs])
             else:
                 def _fmt_entry_forced_start(path, suffix):
                     if path == target_path:
@@ -303,7 +325,7 @@ class BaseGenerator(ABC):
                     return "state_" + flatten_name(path, "_") + suffix
 
                 entry_funcs = get_entry_sequence(name_path, target_path, _fmt_entry_forced_start)
-                code += "".join([f"{indent}    {fn}(ctx);\n" for fn in entry_funcs])
+                code += "".join([f"{indent}    {fn}(ctx){self.STMT_END}\n" for fn in entry_funcs])
 
                 parallel_data = resolve_state_data(self.data, target_path)
                 if not parallel_data or 'states' not in parallel_data:
@@ -320,15 +342,16 @@ class BaseGenerator(ABC):
                         if matching_fork:
                             fork_target_path = target_path + matching_fork.split('/')
                             deep_entries = get_entry_sequence(target_path, fork_target_path, self._fmt_entry)
-                            code += "".join([f"{indent}    {fn}(ctx);\n" for fn in deep_entries])
+                            code += "".join([f"{indent}    {fn}(ctx){self.STMT_END}\n" for fn in deep_entries])
                         else:
                             child_path = target_path + [child_name]
                             init_func = self._fmt_entry(child_path, "_entry")
-                            code += f"{indent}    {init_func}(ctx);\n"
+                            code += f"{indent}    {init_func}(ctx){self.STMT_END}\n"
 
-            code += f"{indent}    return;\n"
+            code += f"{indent}    return{self.STMT_END}\n"
 
-        code += f"{indent}}}\n"
+        if self.BLOCK_CLOSE:
+            code += f"{indent}{self.BLOCK_CLOSE}\n"
         return code
 
     def recurse(self, name_path, data, parent_ptrs):
@@ -338,7 +361,7 @@ class BaseGenerator(ABC):
             my_c_name = flatten_name(name_path, "_")
 
             disp_name = "/" + "/".join(name_path[1:]) if len(name_path) > 1 else "/"
-            preamble = self.FUNC_PREAMBLE.format(short_name=name_path[-1], display_name=disp_name, state_id=my_id_num)
+            preamble = self.format_template(self.FUNC_PREAMBLE, short_name=name_path[-1], display_name=disp_name, state_id=my_id_num)
 
             parent_run_ptr = parent_ptrs[0] if parent_ptrs else None
             parent_exit_ptr = parent_ptrs[1] if parent_ptrs else None
@@ -351,13 +374,13 @@ class BaseGenerator(ABC):
             clear_parent_code = ""
 
             if parent_run_ptr:
-                set_parent_code += f"{self.fmt_set_fn(parent_run_ptr, f'state_{my_c_name}_do')}\n    "
+                set_parent_code += f"{self.fmt_set_fn(parent_run_ptr, f'state_{my_c_name}_do')}{self.LINE_SEP}"
                 set_parent_code += self.fmt_set_fn(parent_exit_ptr, f'state_{my_c_name}_exit')
 
                 if parent_hist_ptr:
-                    set_parent_code += f"\n    {self.fmt_set_fn(parent_hist_ptr, f'state_{my_c_name}_entry')}"
+                    set_parent_code += f"{self.LINE_SEP}{self.fmt_set_fn(parent_hist_ptr, f'state_{my_c_name}_entry')}"
 
-                clear_parent_code += f"{self.fmt_clear_fn(parent_run_ptr)}\n    "
+                clear_parent_code += f"{self.fmt_clear_fn(parent_run_ptr)}{self.LINE_SEP}"
                 clear_parent_code += self.fmt_clear_fn(parent_exit_ptr)
 
             trans_code = ""
@@ -391,7 +414,7 @@ class BaseGenerator(ABC):
                         self.outputs['context_init'].append(self.fmt_ptr_init(region_ptr))
                         self.outputs['context_init'].append(self.fmt_ptr_init(region_exit_ptr))
 
-                        p_entries += f"    state_{child_c_name}_entry(ctx);\n"
+                        p_entries += f"    state_{child_c_name}_entry(ctx){self.STMT_END}\n"
                         p_exits += f"    {self.fmt_opt_call_region_exit(region_exit_ptr)}\n"
                         p_ticks += f"    {self.fmt_tick_child(child_c_name)}\n"
                         if safety_check:
@@ -399,7 +422,7 @@ class BaseGenerator(ABC):
 
                         self.recurse(child_path, child_data, (region_ptr, region_exit_ptr, None))
 
-                    func_body = self.COMPOSITE_AND_TEMPLATE.format(
+                    func_body = self.format_template(self.COMPOSITE_AND_TEMPLATE,
                         c_name=my_c_name, state_id=my_id_num, preamble=preamble,
                         hook_entry=h_entry, hook_do=h_do, hook_exit=h_exit,
                         entry=data.get('entry', ''), exit=data.get('exit', ''), do=data.get('do', ''),
@@ -423,9 +446,9 @@ class BaseGenerator(ABC):
                     self.outputs['context_init'].append(self.fmt_ptr_init(my_hist))
 
                     init_target = flatten_name(name_path + [data['initial']], "_")
-                    hist_bool = "true" if data.get('history', False) else "false"
+                    hist_bool = self.TRUE_LIT if data.get('history', False) else self.FALSE_LIT
 
-                    func_body = self.COMPOSITE_OR_TEMPLATE.format(
+                    func_body = self.format_template(self.COMPOSITE_OR_TEMPLATE,
                         c_name=my_c_name, state_id=my_id_num, preamble=preamble,
                         hook_entry=h_entry, hook_do=h_do, hook_exit=h_exit,
                         entry=data.get('entry', ''), exit=data.get('exit', ''), do=data.get('do', ''),
@@ -441,7 +464,7 @@ class BaseGenerator(ABC):
                     for child_name, child_data in data['states'].items():
                         self.recurse(name_path + [child_name], child_data, (my_ptr, my_exit_ptr, child_hist_ptr))
             else:
-                func_body = self.LEAF_TEMPLATE.format(
+                func_body = self.format_template(self.LEAF_TEMPLATE,
                     c_name=my_c_name, state_id=my_id_num, preamble=preamble,
                     hook_entry=h_entry, hook_do=h_do, hook_exit=h_exit,
                     entry=data.get('entry', ''), exit=data.get('exit', ''), do=data.get('do', ''),
@@ -469,8 +492,8 @@ class BaseGenerator(ABC):
                     child_path = name_path + [child_name]
                     child_func = f"inspect_{flatten_name(child_path, '_')}"
                     self.gen_inspector(child_path, child_data, None)
-                    content += f"    {self.fmt_inspect_call(child_func)}\n"
-                    if i < len(children)-1: content += f'    {self.fmt_inspect_push(",")}\n'
+                    content += f"{self.fmt_inspect_call(child_func)}\n"
+                    if i < len(children)-1: content += f'{self.fmt_inspect_push(",")}\n'
                 content += f'{self.fmt_inspect_push("]")}\n'
             else:
                 my_ptr = f"ptr_{my_c_name}"
@@ -479,11 +502,15 @@ class BaseGenerator(ABC):
                 first = True
                 for child_name, child_data in data['states'].items():
                     c_name = flatten_name(name_path + [child_name], "_")
-                    else_txt = "else " if not first else ""
-                    content += f"    {else_txt}{self.fmt_if_open(self.fmt_inspect_ptr_eq(my_ptr, f'state_{c_name}_do'))}\n"
+                    cond = self.fmt_inspect_ptr_eq(my_ptr, f'state_{c_name}_do')
+                    if first:
+                        content += f"    {self.fmt_if_open(cond)}\n"
+                    else:
+                        content += f"    {self.fmt_elif_open(cond)}\n"
                     content += f'        {self.fmt_inspect_push("/")}\n'
                     content += f"        {self.fmt_inspect_call(f'inspect_{c_name}')}\n"
-                    content += "    }\n"
+                    if self.BLOCK_CLOSE:
+                        content += f"    {self.BLOCK_CLOSE}\n"
                     first = False
 
-        self.inspect_list.append(self.INSPECTOR_TEMPLATE.format(c_name=my_c_name, push_name=push_name, content=content))
+        self.inspect_list.append(self.format_template(self.INSPECTOR_TEMPLATE, c_name=my_c_name, push_name=push_name, content=content))

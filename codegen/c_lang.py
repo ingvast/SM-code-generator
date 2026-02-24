@@ -252,6 +252,9 @@ void inspect_{c_name}(SM_Context* ctx, char* buf, size_t* off, size_t max) {{
     def fmt_inspect_ptr_eq(self, ptr, fn_name):
         return f"ctx->{ptr} == {fn_name}"
 
+    def fmt_elif_open(self, cond):
+        return f"else if ({cond}) {{"
+
     # --- Override recurse to also generate forward declarations ---
 
     def recurse(self, name_path, data, parent_ptrs):

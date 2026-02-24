@@ -72,6 +72,23 @@
   captionpos=b
 }
 
+% Listings setup for Python
+\lstdefinelanguage{Python}{
+  keywords={def, class, if, elif, else, while, return, import, from, True, False, None, is, not, and, or, self},
+  keywordstyle=\color{blue}\bfseries,
+  ndkeywords={Context, StateMachine},
+  ndkeywordstyle=\color{rustfunc}\bfseries,
+  comment=[l]{\#},
+  commentstyle=\color{comment}\ttfamily,
+  stringstyle=\color{yamlval}\ttfamily,
+  morestring=[b]',
+  morestring=[b]",
+  backgroundcolor=\color{bg},
+  frame=single,
+  basicstyle=\ttfamily\small,
+  captionpos=b
+}
+
 % Listings setup for Bash
 \lstdefinelanguage{Bash}{
   keywords={python3, uv, run},
@@ -93,7 +110,7 @@
 \newpage
 
 \section{Overview}
-This tool generates a safety-critical Hierarchical State Machine (HSM) from a YAML/SMB definition file. It supports two output languages --- \textbf{Rust} and \textbf{C} --- and includes advanced features such as orthogonal regions (parallelism), history patterns, decision trees, and fork transitions.
+This tool generates a safety-critical Hierarchical State Machine (HSM) from a YAML/SMB definition file. It supports three output languages --- \textbf{Rust}, \textbf{C}, and \textbf{Python} --- and includes advanced features such as orthogonal regions (parallelism), history patterns, decision trees, and fork transitions.
 
 The generator also produces a \textbf{Graphviz DOT} file for visualizing the state machine diagram.
 
@@ -120,8 +137,8 @@ uv run python sm-compiler.py model.smb -o build/myfsm
 \midrule
 \endhead
 \texttt{file} & (required) & Path to the input \texttt{.smb} file. \\
-\texttt{-{}-lang} & from file & Output language: \texttt{rust} or \texttt{c}. If omitted, reads the \texttt{lang:} key from the SMB file (defaults to \texttt{rust} if absent). The \texttt{lang:} key may be a list, in which case code is generated for all listed languages. \\
-\texttt{-o}, \texttt{-{}-output} & \texttt{./statemachine} & Output base path without extension. Language-specific extensions (\texttt{.rs}, \texttt{.c}, \texttt{.h}, \texttt{.dot}) are appended automatically. Parent directories are created if needed. \\
+\texttt{-{}-lang} & from file & Output language: \texttt{rust}, \texttt{c}, or \texttt{python}. If omitted, reads the \texttt{lang:} key from the SMB file (defaults to \texttt{rust} if absent). The \texttt{lang:} key may be a list, in which case code is generated for all listed languages. \\
+\texttt{-o}, \texttt{-{}-output} & \texttt{./statemachine} & Output base path without extension. Language-specific extensions (\texttt{.rs}, \texttt{.c}, \texttt{.h}, \texttt{.py}, \texttt{.dot}) are appended automatically. Parent directories are created if needed. \\
 \bottomrule
 \end{longtable}
 
@@ -135,7 +152,8 @@ Given \texttt{-o path/to/name}, the following files are produced:
 \endhead
 Rust & \texttt{name.rs} & Complete Rust implementation (single file). \\
 C & \texttt{name.h}, \texttt{name.c} & Header with struct/function declarations and source with implementation. The \texttt{.c} file includes \texttt{name.h} automatically. \\
-Both & \texttt{name.dot} & Graphviz visualization of the state machine. \\
+Python & \texttt{name.py} & Complete Python implementation (single file). Import with \texttt{from name import StateMachine}. \\
+All & \texttt{name.dot} & Graphviz visualization of the state machine. \\
 \bottomrule
 \end{longtable}
 
@@ -143,7 +161,7 @@ Both & \texttt{name.dot} & Graphviz visualization of the state machine. \\
 The input file uses YAML syntax with the extension \texttt{.smb}. A complete model has this top-level structure:
 
 \begin{lstlisting}[language=YAML, caption={Top-level SMB structure}]
-lang: rust              # Target language (rust or c)
+lang: rust              # Target language (rust, c, or python)
 
 includes: |             # Code placed before the Context struct
   // imports, helper functions, etc.
@@ -176,17 +194,20 @@ states:
 \subsection{Language-Specific Syntax}
 Since \texttt{includes}, \texttt{context}, \texttt{context\_init}, guards, and actions contain raw target-language code, they must use the syntax of the selected output language:
 
-\begin{longtable}{@{}lll@{}}
+\begin{longtable}{@{}llll@{}}
 \toprule
-\textbf{Element} & \textbf{Rust} & \textbf{C} \\
+\textbf{Element} & \textbf{Rust} & \textbf{C} & \textbf{Python} \\
 \midrule
 \endhead
-Context access & \texttt{ctx.field} & \texttt{ctx->field} \\
-Context fields & \texttt{pub field: Type,} & \texttt{Type field;} \\
-Context init & \texttt{field: value,} & \texttt{sm->ctx.field = value;} \\
-Print & \texttt{println!("...")} & \texttt{printf("...\textbackslash n")} \\
-String type & \texttt{\&str} & \texttt{const char*} \\
-Boolean & \texttt{bool} & \texttt{bool} (via \texttt{stdbool.h}) \\
+Context access & \texttt{ctx.field} & \texttt{ctx->field} & \texttt{ctx.field} \\
+Context fields & \texttt{pub field: Type,} & \texttt{Type field;} & \texttt{field: Type} (annotation) \\
+Context init & \texttt{field: value,} & \texttt{sm->ctx.field = value;} & \texttt{ctx.field = value} \\
+Print & \texttt{println!("...")} & \texttt{printf("...\textbackslash n")} & \texttt{print("...")} \\
+String type & \texttt{\&str} & \texttt{const char*} & \texttt{str} \\
+Boolean & \texttt{bool} & \texttt{bool} (via \texttt{stdbool.h}) & \texttt{bool} \\
+True/False & \texttt{true}/\texttt{false} & \texttt{true}/\texttt{false} & \texttt{True}/\texttt{False} \\
+Logical OR & \texttt{||} & \texttt{||} & \texttt{or} \\
+Logical AND & \texttt{\&\&} & \texttt{\&\&} & \texttt{and} \\
 \bottomrule
 \end{longtable}
 
@@ -269,8 +290,45 @@ gcc main.c statemachine.c -o my_program
 \bottomrule
 \end{longtable}
 
+\subsection{Python Integration}
+The generated code provides a \texttt{StateMachine} class. No compilation needed --- run directly with Python 3.
+
+\begin{lstlisting}[language=Python, caption={Example Python driver}]
+from statemachine import StateMachine
+
+sm = StateMachine()
+print(sm.get_state_str())
+
+while sm.is_running():
+    sm.tick()
+    sm.ctx.counter += 1
+    print(f"{sm.ctx.counter:02d}: {sm.get_state_str()}")
+\end{lstlisting}
+
+Run with:
+\begin{lstlisting}[language=Bash]
+python3 driver.py
+\end{lstlisting}
+
+\subsubsection*{Python API}
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+\textbf{Method / Attribute} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{StateMachine()} & Creates and initializes the state machine. Enters the initial state. \\
+\texttt{sm.tick()} & Executes one cycle of logic. \\
+\texttt{sm.is\_running()} & Returns \texttt{True} if the machine has not terminated. \\
+\texttt{sm.get\_state\_str()} & Returns the current state path as a string. \\
+\texttt{sm.ctx} & Direct access to the \texttt{Context} object (read/write fields). \\
+\texttt{ctx.in\_state\_X()} & Returns \texttt{True} if state \texttt{X} is currently active. \\
+\bottomrule
+\end{longtable}
+
+\textbf{Note:} Python uses \texttt{None} for empty function pointers and first-class functions for state callbacks. The \texttt{context\_init} code uses \texttt{ctx.field = value} syntax, where \texttt{ctx} is an alias for \texttt{self} inside the \texttt{Context.\_\_init\_\_} method.
+
 \subsection{Context Struct}
-Both backends generate a \texttt{Context} struct (Rust: \texttt{Context}, C: \texttt{SM\_Context}) containing:
+All backends generate a \texttt{Context} struct or class (Rust: \texttt{Context}, C: \texttt{SM\_Context}, Python: \texttt{Context}) containing:
 
 \begin{itemize}
     \item \texttt{now}: Logical time (\texttt{f64}/\texttt{double}). You update this before each tick.
@@ -318,7 +376,7 @@ The following variables are injected into the scope of your code snippets. Use t
 \textbf{Variable} & \textbf{Scope} & \textbf{Description} \\
 \midrule
 \endhead
-\texttt{ctx} & All & The shared context struct. Rust: \texttt{\&mut Context}. C: \texttt{SM\_Context*}. \\
+\texttt{ctx} & All & The shared context struct. Rust: \texttt{\&mut Context}. C: \texttt{SM\_Context*}. Python: \texttt{Context} instance. \\
 \texttt{time} & All & Time elapsed (seconds) since entering the current state (\texttt{f64}/\texttt{double}). \\
 \texttt{state\_name} & All & Short name of the current state (e.g., \texttt{"idle"}). \\
 \texttt{state\_full\_name} & All & Full path of the current state (e.g., \texttt{"/run/idle"}). \\
@@ -424,7 +482,7 @@ The \texttt{to:} keyword supports several addressing modes:
 \end{itemize}
 
 \subsection{Termination}
-Setting \texttt{to: null} causes the machine to exit all states from the current state up through root, then stop. After termination, \texttt{is\_running()} (Rust) or \texttt{sm\_is\_running()} (C) returns false.
+Setting \texttt{to: null} causes the machine to exit all states from the current state up through root, then stop. After termination, \texttt{is\_running()} (Rust/Python) or \texttt{sm\_is\_running()} (C) returns false.
 
 \section{History}
 A composite state with \texttt{history: true} remembers its last active child. When re-entered, it resumes from that child instead of the \texttt{initial} state.
@@ -517,7 +575,7 @@ main_task:
       to: next_step
 \end{lstlisting}
 
-\textbf{Note:} Use the \texttt{IN\_STATE(X)} macro in guards for portable state checks. In Rust, it expands to \texttt{ctx.in\_state\_X()}. In C, it expands to the \texttt{IN\_STATE\_X} macro.
+\textbf{Note:} Use the \texttt{IN\_STATE(X)} macro in guards for portable state checks. In Rust and Python, it expands to \texttt{ctx.in\_state\_X()}. In C, it expands to the \texttt{IN\_STATE\_X} macro.
 
 \section{Decisions (Logic Trees)}
 \label{sec:decisions}

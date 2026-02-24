@@ -154,3 +154,10 @@ def test_transition_verification_c(lang, tmp_path):
     """Same machine as test_transition_verification but targeting the C backend."""
     actual = run_pipeline("transition-verification-c.smb", lang, tmp_path)
     check_output(actual, "transition-verification-c.smb", lang)
+
+
+@pytest.mark.parametrize("lang", get_languages("transition-verification-python.smb"))
+def test_transition_verification_python(lang, tmp_path):
+    """Same machine as test_transition_verification but targeting the Python backend."""
+    actual = run_pipeline("transition-verification-python.smb", lang, tmp_path)
+    check_output(actual, "transition-verification-python.smb", lang)
