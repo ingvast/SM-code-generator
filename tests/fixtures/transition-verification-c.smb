@@ -26,10 +26,10 @@ context: |
     int counter;
     bool do_loop;
 
-# How to initialize the above fields
+# How to initialize the above fields (runs after memset in sm_init)
 context_init: |
-    .counter = 0,
-    .do_loop = true,
+    sm->ctx.counter = 0;
+    sm->ctx.do_loop = true;
 
 hooks:
   entry: |

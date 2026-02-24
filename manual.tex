@@ -23,7 +23,7 @@
 
 % Listings setup for YAML
 \lstdefinelanguage{YAML}{
-  keywords={states, initial, transitions, guard, action, to, do, entry, exit, orthogonal, hooks, decisions, context},
+  keywords={states, initial, transitions, guard, action, to, do, entry, exit, orthogonal, hooks, decisions, context, context_init, includes, history, lang},
   keywordstyle=\color{yamlkey}\bfseries,
   ndkeywords={true, false, null},
   ndkeywordstyle=\color{yamlval}\bfseries,
@@ -43,7 +43,7 @@
 
 % Listings setup for Rust
 \lstdefinelanguage{Rust}{
-  keywords={fn, pub, struct, impl, let, mut, if, else, match, return, bool, f64, u32},
+  keywords={fn, pub, struct, impl, let, mut, if, else, match, return, bool, f64, u32, mod, use, while},
   keywordstyle=\color{blue}\bfseries,
   ndkeywords={Context, StateMachine, Some, None},
   ndkeywordstyle=\color{rustfunc}\bfseries,
@@ -56,9 +56,25 @@
   captionpos=b
 }
 
+% Listings setup for C
+\lstdefinelanguage{C}{
+  keywords={void, int, bool, double, char, struct, typedef, if, else, while, return, true, false, NULL, size_t},
+  keywordstyle=\color{blue}\bfseries,
+  ndkeywords={SM_Context, StateMachine, StateFunc},
+  ndkeywordstyle=\color{rustfunc}\bfseries,
+  comment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  commentstyle=\color{comment}\ttfamily,
+  stringstyle=\color{yamlval}\ttfamily,
+  backgroundcolor=\color{bg},
+  frame=single,
+  basicstyle=\ttfamily\small,
+  captionpos=b
+}
+
 % Listings setup for Bash
 \lstdefinelanguage{Bash}{
-  keywords={python3},
+  keywords={python3, uv, run},
   keywordstyle=\color{blue}\bfseries,
   backgroundcolor=\color{bg},
   frame=single,
@@ -77,70 +93,193 @@
 \newpage
 
 \section{Overview}
-This tool generates a safety-critical Hierarchical State Machine (HSM) in Rust from a YAML definition. It supports advanced features like orthogonal regions (parallelism), history patterns, and complex decision trees.
+This tool generates a safety-critical Hierarchical State Machine (HSM) from a YAML/SMB definition file. It supports two output languages --- \textbf{Rust} and \textbf{C} --- and includes advanced features such as orthogonal regions (parallelism), history patterns, decision trees, and fork transitions.
+
+The generator also produces a \textbf{Graphviz DOT} file for visualizing the state machine diagram.
 
 \section{Generating the Code}
-The generator is a Python script (\texttt{sm-compiler.py}) that validates your model and produces Rust code.
+The generator is a Python script (\texttt{sm-compiler.py}) that validates your model and produces code in the selected target language.
 
 \begin{lstlisting}[language=Bash, caption=Command Line Usage]
-# Basic Usage
-python3 sm-compiler.py model.yaml
+# Language is read from the 'lang:' key in the .smb file
+uv run python sm-compiler.py model.smb
 
-# Specify Output Language (Default is Rust)
-python3 sm-compiler.py model.yaml --lang rust
+# Override the language
+uv run python sm-compiler.py model.smb --lang rust
+uv run python sm-compiler.py model.smb --lang c
+
+# Custom output base path (extensions added automatically)
+# Produces build/myfsm.rs and build/myfsm.dot
+uv run python sm-compiler.py model.smb -o build/myfsm
 \end{lstlisting}
 
+\subsection{Command Line Options}
+\begin{longtable}{@{}llp{8cm}@{}}
+\toprule
+\textbf{Option} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{file} & (required) & Path to the input \texttt{.smb} file. \\
+\texttt{-{}-lang} & from file & Output language: \texttt{rust} or \texttt{c}. If omitted, reads the \texttt{lang:} key from the SMB file (defaults to \texttt{rust} if absent). The \texttt{lang:} key may be a list, in which case code is generated for all listed languages. \\
+\texttt{-o}, \texttt{-{}-output} & \texttt{./statemachine} & Output base path without extension. Language-specific extensions (\texttt{.rs}, \texttt{.c}, \texttt{.h}, \texttt{.dot}) are appended automatically. Parent directories are created if needed. \\
+\bottomrule
+\end{longtable}
+
 \subsection{Outputs}
-\begin{itemize}
-    \item \texttt{statemachine.rs}: The complete Rust implementation.
-    \item \texttt{statemachine.dot}: A Graphviz visualization of your logic.
-\end{itemize}
+Given \texttt{-o path/to/name}, the following files are produced:
+
+\begin{longtable}{@{}llp{8cm}@{}}
+\toprule
+\textbf{Language} & \textbf{Output Files} & \textbf{Description} \\
+\midrule
+\endhead
+Rust & \texttt{name.rs} & Complete Rust implementation (single file). \\
+C & \texttt{name.h}, \texttt{name.c} & Header with struct/function declarations and source with implementation. The \texttt{.c} file includes \texttt{name.h} automatically. \\
+Both & \texttt{name.dot} & Graphviz visualization of the state machine. \\
+\bottomrule
+\end{longtable}
+
+\section{SMB File Structure}
+The input file uses YAML syntax with the extension \texttt{.smb}. A complete model has this top-level structure:
+
+\begin{lstlisting}[language=YAML, caption={Top-level SMB structure}]
+lang: rust              # Target language (rust or c)
+
+includes: |             # Code placed before the Context struct
+  // imports, helper functions, etc.
+
+context: |              # User-defined fields for the Context struct
+  pub counter: i32,     # (Rust syntax)
+  pub flag: bool,
+
+context_init: |         # Initialization code for context fields
+  counter: 0,           # (Rust: struct init syntax)
+  flag: true,
+
+hooks:                  # Global code injected into all states
+  entry: |
+    // runs on every state entry
+  exit: |
+    // runs on every state exit
+  do: |
+    // runs on every state tick
+  transition: |
+    // runs on every transition
+
+initial: first_state    # Name of the initial child state
+
+states:
+  first_state:
+    # ... state definition ...
+\end{lstlisting}
+
+\subsection{Language-Specific Syntax}
+Since \texttt{includes}, \texttt{context}, \texttt{context\_init}, guards, and actions contain raw target-language code, they must use the syntax of the selected output language:
+
+\begin{longtable}{@{}lll@{}}
+\toprule
+\textbf{Element} & \textbf{Rust} & \textbf{C} \\
+\midrule
+\endhead
+Context access & \texttt{ctx.field} & \texttt{ctx->field} \\
+Context fields & \texttt{pub field: Type,} & \texttt{Type field;} \\
+Context init & \texttt{field: value,} & \texttt{sm->ctx.field = value;} \\
+Print & \texttt{println!("...")} & \texttt{printf("...\textbackslash n")} \\
+String type & \texttt{\&str} & \texttt{const char*} \\
+Boolean & \texttt{bool} & \texttt{bool} (via \texttt{stdbool.h}) \\
+\bottomrule
+\end{longtable}
 
 \section{Integration \& API}
 
-\subsection{The Main Loop}
+\subsection{Rust Integration}
 The generated code provides a \texttt{StateMachine} struct. You must initialize it and call \texttt{tick()} cyclically.
 
-\begin{lstlisting}[language=Rust, caption={Example main.rs}]
+\begin{lstlisting}[language=Rust, caption={Example Rust driver (main.rs)}]
 mod statemachine;
 use statemachine::StateMachine;
 
 fn main() {
     let mut sm = StateMachine::new();
 
-    // Initialize inputs (accessing public context)
-    sm.ctx.counter = 0;
-
-    // Execution Loop
     while sm.is_running() {
-        // 1. Advance logical time (if using timers)
-        sm.ctx.now += 0.1;
-        
-        // 2. Run logic
+        sm.ctx.now += 0.1;  // Advance logical time
         sm.tick();
-        
-        // 3. Debug Output
-        println!("Current State: {}", sm.get_state_str());
-        
+        println!("State: {}", sm.get_state_str());
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
 }
 \end{lstlisting}
 
-\subsection{Public API Methods}
-These methods are available on the \texttt{StateMachine} instance (\texttt{sm}) or its context (\texttt{ctx}).
-
+\subsubsection*{Rust API}
 \begin{longtable}{@{}llp{8cm}@{}}
 \toprule
 \textbf{Function} & \textbf{Location} & \textbf{Description} \\
 \midrule
 \endhead
-\texttt{tick()} & \texttt{sm} & Executes one cycle of logic (Do-activities \& Transitions). \\
-\texttt{is\_running()} & \texttt{sm} & Returns \texttt{false} if the machine has terminated. \\
-\texttt{get\_state\_str()} & \texttt{sm} & Returns a string representation (e.g., \texttt{/run/active}). \\
-\texttt{in\_state\_X()} & \texttt{ctx} & Returns \texttt{true} if state \texttt{X} is currently active. \\
+\texttt{StateMachine::new()} & constructor & Creates and starts the state machine. \\
+\texttt{sm.tick()} & \texttt{sm} & Executes one cycle of logic (do-activities \& transitions). \\
+\texttt{sm.is\_running()} & \texttt{sm} & Returns \texttt{false} if the machine has terminated. \\
+\texttt{sm.get\_state\_str()} & \texttt{sm} & Returns a string like \texttt{/run/active} or \texttt{/p/[a/x,b/y]}. \\
+\texttt{ctx.in\_state\_X()} & \texttt{ctx} & Returns \texttt{true} if state \texttt{X} is currently active. \\
 \bottomrule
 \end{longtable}
+
+\subsection{C Integration}
+The generated code provides a \texttt{StateMachine} struct with an \texttt{SM\_Context} inside. Use the provided API functions.
+
+\begin{lstlisting}[language=C, caption={Example C driver (main.c)}]
+#include "statemachine.h"
+#include <stdio.h>
+#include <unistd.h>
+
+int main(void) {
+    StateMachine sm;
+    sm_init(&sm);
+
+    char state_buf[256];
+
+    while (sm_is_running(&sm)) {
+        sm_tick(&sm);
+        sm_get_state_str(&sm, state_buf, sizeof(state_buf));
+        printf("State: %s\n", state_buf);
+        usleep(100000);
+    }
+
+    return 0;
+}
+\end{lstlisting}
+
+Compile with:
+\begin{lstlisting}[language=Bash]
+gcc main.c statemachine.c -o my_program
+\end{lstlisting}
+
+\subsubsection*{C API}
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{sm\_init(StateMachine* sm)} & Initializes context (zeroes memory, applies \texttt{context\_init}), enters initial state. \\
+\texttt{sm\_tick(StateMachine* sm)} & Executes one cycle of logic. \\
+\texttt{sm\_is\_running(StateMachine* sm)} & Returns \texttt{true} if the machine has not terminated. \\
+\texttt{sm\_get\_state\_str(StateMachine* sm, char* buf, size\_t max)} & Writes the current state path into \texttt{buf}. \\
+\texttt{IN\_STATE\_X} & Macro: evaluates to true if state \texttt{X} is currently active (use inside guards and actions where \texttt{ctx} is in scope). \\
+\bottomrule
+\end{longtable}
+
+\subsection{Context Struct}
+Both backends generate a \texttt{Context} struct (Rust: \texttt{Context}, C: \texttt{SM\_Context}) containing:
+
+\begin{itemize}
+    \item \texttt{now}: Logical time (\texttt{f64}/\texttt{double}). You update this before each tick.
+    \item \texttt{state\_timers[]}: Per-state entry timestamps (set automatically on entry).
+    \item \texttt{transition\_fired}: Safety flag for orthogonal regions (managed automatically).
+    \item \texttt{terminated}: Set when a \texttt{null} transition fires (managed automatically).
+    \item Hierarchy pointers: Function pointers tracking the active state at each level (managed automatically).
+    \item User fields: Whatever you declare in the \texttt{context:} block.
+\end{itemize}
 
 \section{Writing Logic: Handlers vs. Hooks}
 
@@ -151,11 +290,11 @@ These are defined inside specific states or transitions in the YAML. They apply 
     \item \textbf{\texttt{entry}}: Runs once when entering the specific state.
     \item \textbf{\texttt{do}}: Runs every tick while in the specific state.
     \item \textbf{\texttt{exit}}: Runs once when leaving the specific state.
-    \item \textbf{\texttt{action}}: Runs during a specific transition (see Section 5).
+    \item \textbf{\texttt{action}}: Runs during a specific transition (see Section~\ref{sec:transitions}).
 \end{itemize}
 
 \subsection{Global Hooks (System-wide)}
-Hooks are defined at the root level under the \texttt{hooks:} key. They allow you to inject code into \textbf{every} occurrence of an event type across the entire machine (e.g., for logging).
+Hooks are defined at the root level under the \texttt{hooks:} key. They inject code into \textbf{every} occurrence of an event type across the entire machine (e.g., for logging).
 
 \begin{longtable}{@{}lp{10cm}@{}}
 \toprule
@@ -165,55 +304,104 @@ Hooks are defined at the root level under the \texttt{hooks:} key. They allow yo
 \texttt{hooks: entry} & Injected into \textbf{all} states' entry handlers. \\
 \texttt{hooks: do} & Injected into \textbf{all} states' do handlers. \\
 \texttt{hooks: exit} & Injected into \textbf{all} states' exit handlers. \\
-\texttt{hooks: transition} & Injected into \textbf{all} transitions (equivalent to a global Action). \\
+\texttt{hooks: transition} & Injected into \textbf{all} transitions (equivalent to a global action). \\
 \bottomrule
 \end{longtable}
 
 \textbf{Note:} There is no \texttt{hooks: action}. Use \texttt{hooks: transition} instead.
 
 \subsection{Available Variables in Code Blocks}
-The following variables are injected into the scope of your Rust snippets:
+The following variables are injected into the scope of your code snippets. Use the appropriate syntax for your target language.
 
-\begin{longtable}{@{}lllp{6cm}@{}}
+\begin{longtable}{@{}llp{7cm}@{}}
 \toprule
-\textbf{Variable} & \textbf{Type} & \textbf{Scope} & \textbf{Description} \\
+\textbf{Variable} & \textbf{Scope} & \textbf{Description} \\
 \midrule
 \endhead
-\texttt{ctx} & \texttt{\&mut Context} & All & The shared context struct holding your data. \\
-\texttt{time} & \texttt{f64} & All & Time elapsed (seconds) since entering the current state. \\
-\texttt{t\_src} & \texttt{\&str} & Action/Trans. & The full path of the state being left. \\
-\texttt{t\_dst} & \texttt{\&str} & Action/Trans. & The full path of the target state. \\
+\texttt{ctx} & All & The shared context struct. Rust: \texttt{\&mut Context}. C: \texttt{SM\_Context*}. \\
+\texttt{time} & All & Time elapsed (seconds) since entering the current state (\texttt{f64}/\texttt{double}). \\
+\texttt{state\_name} & All & Short name of the current state (e.g., \texttt{"idle"}). \\
+\texttt{state\_full\_name} & All & Full path of the current state (e.g., \texttt{"/run/idle"}). \\
+\texttt{t\_src} & Transitions & The full path of the source state. \\
+\texttt{t\_dst} & Transitions & The full path/description of the target. \\
 \bottomrule
 \end{longtable}
 
 \section{Transitions}
-A transition determines how the machine moves.
+\label{sec:transitions}
+A transition determines how the machine moves between states.
+
+\subsection{Basic Transition Syntax}
+
+\begin{lstlisting}[language=YAML, caption={Transition syntax}]
+transitions:
+  - guard: ctx.counter == 5    # Condition (target language expression)
+    action: |                  # Code executed during the transition
+      // runs BEFORE exit/entry sequence
+    to: target_state           # Where to go
+\end{lstlisting}
+
+All three fields are optional:
+\begin{itemize}
+    \item Omitting \texttt{guard} makes the transition unconditional (\texttt{true}).
+    \item Omitting \texttt{action} means no transition-time code.
+    \item \texttt{to: null} triggers machine termination.
+\end{itemize}
+
+\subsection{Transition Execution Order}
+When a transition fires:
+\begin{enumerate}
+    \item Evaluate the \texttt{guard} condition.
+    \item Set \texttt{transition\_fired = true}.
+    \item Execute \texttt{action} code (if any).
+    \item Execute the exit sequence (from current state up to the Least Common Ancestor, bottom-up).
+    \item Execute the entry sequence (from LCA down to target state, top-down).
+\end{enumerate}
 
 \subsection{Using Actions (The Mealy Aspect)}
 The \texttt{action} keyword allows you to execute code \textit{during} the transition, before the old state is exited.
 
-\begin{lstlisting}[language=YAML, caption={Example using Action variables}]
+\begin{lstlisting}[language=YAML, caption={Rust example using action variables}]
 states:
   reading:
     transitions:
       - guard: ctx.value > 100
-        # This code runs BEFORE reading exits
         action: |
           println!("Moving {} -> {}", t_src, t_dst);
           ctx.log_alert("Threshold Exceeded");
         to: alert_mode
 \end{lstlisting}
 
+\begin{lstlisting}[language=YAML, caption={C example using action variables}]
+states:
+  reading:
+    transitions:
+      - guard: ctx->value > 100
+        action: |
+          printf("Moving %s -> %s\n", t_src, t_dst);
+          log_alert(ctx, "Threshold Exceeded");
+        to: alert_mode
+\end{lstlisting}
+
 \subsection{Path Syntax}
+\label{sec:paths}
 The \texttt{to:} keyword supports several addressing modes:
 
-\begin{itemize}
-    \item \textbf{\texttt{/absolute/path}}: Starts from the root. Use for long jumps.
-    \item \textbf{\texttt{sibling}}: Looks for a state in the same parent.
-    \item \textbf{\texttt{./child}}: Looks for a direct child of the current state.
-    \item \textbf{\texttt{../uncle}}: Moves up one level, then finds a sibling.
-    \item \textbf{\texttt{.}}: \textbf{Self-Transition}. The state exits and immediately re-enters.
-\end{itemize}
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+\textbf{Syntax} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{/absolute/path} & From the root. Use for long jumps across the hierarchy. \\
+\texttt{sibling} & A state in the same parent (lateral transition). \\
+\texttt{./child} & A direct child of the current state (drill down). \\
+\texttt{../uncle} & Up one level, then a sibling of the parent. \\
+\texttt{.} & Self-transition: the state exits and immediately re-enters. \\
+\texttt{null} & Machine termination. Exits all states up to root and stops. \\
+\texttt{@decision\_name} & Delegate to a named decision tree (see Section~\ref{sec:decisions}). \\
+\texttt{/path/[a/tgt, b/tgt]} & Explicit fork into an orthogonal state (see Section~\ref{sec:orthogonal}). \\
+\bottomrule
+\end{longtable}
 
 \subsection{Transition Scenarios}
 
@@ -231,63 +419,123 @@ The \texttt{to:} keyword supports several addressing modes:
 
 \subsubsection*{Move Up (Child to Parent/Uncle)}
 \begin{itemize}
-    \item \textbf{Exits:} C
-    \item \textbf{Exits:} Parent P.
+    \item \textbf{Exits:} C, then Parent P.
     \item \textbf{Enters:} U
 \end{itemize}
 
+\subsection{Termination}
+Setting \texttt{to: null} causes the machine to exit all states from the current state up through root, then stop. After termination, \texttt{is\_running()} (Rust) or \texttt{sm\_is\_running()} (C) returns false.
+
+\section{History}
+A composite state with \texttt{history: true} remembers its last active child. When re-entered, it resumes from that child instead of the \texttt{initial} state.
+
+\begin{lstlisting}[language=YAML, caption={History example}]
+process:
+  history: true
+  initial: step_a
+  states:
+    step_a:
+      transitions:
+        - guard: ctx.counter == 3
+          to: step_b
+    step_b:
+      transitions:
+        - guard: ctx.counter == 5
+          to: /other_state
+\end{lstlisting}
+
+If the machine leaves \texttt{process} while in \texttt{step\_b}, and later transitions back to \texttt{process}, it will re-enter \texttt{step\_b} directly (skipping \texttt{step\_a}).
+
 \section{Orthogonal States (Parallelism)}
-An orthogonal state runs multiple child regions simultaneously.
+\label{sec:orthogonal}
+An orthogonal state runs multiple child regions simultaneously.\\
 \textbf{Keyword:} \texttt{orthogonal: true}
+
+\begin{lstlisting}[language=YAML, caption={Orthogonal state definition}]
+parallel_task:
+  orthogonal: true
+  states:
+    region_a:
+      initial: idle_a
+      states:
+        idle_a: {}
+        working_a: {}
+    region_b:
+      initial: idle_b
+      states:
+        idle_b: {}
+        working_b: {}
+\end{lstlisting}
+
+When \texttt{parallel\_task} is entered, \textbf{all} child regions are entered simultaneously. Each region ticks independently. When exiting, all regions are exited.
+
+The state path for orthogonal states uses bracket notation: \texttt{/parallel\_task/[region\_a/idle\_a,region\_b/idle\_b]}.
+
+\subsection{Safety: \texttt{transition\_fired}}
+When a transition fires in one region, the other regions' ticks are skipped for that cycle to prevent inconsistent state. This is handled automatically via the \texttt{transition\_fired} flag.
 
 \subsection{Fork Transitions (Drilling Down)}
 You can enter an orthogonal state by targeting its children directly.
 
 \begin{enumerate}
     \item \textbf{Implicit Fork:} \texttt{to: /run/g/a/sub\_state} \\
-    The generator forces region \texttt{a} to \texttt{sub\_state}. Other regions start normally.
+    The generator forces region \texttt{a} to \texttt{sub\_state}. Other regions start at their \texttt{initial} states.
     \item \textbf{Explicit Fork:} \texttt{to: /run/g/[a/sub\_state, b/other]} \\
     Explicitly sets the target for multiple regions at once.
 \end{enumerate}
 
-\subsection{Joining (Synchronization)}
-To "join" parallel states, transition from the \textbf{Parent} based on the status of the \textbf{Children}.
+\subsection{Cross-Limb Transitions}
+A transition from one region to another region within the same orthogonal parent is a \textbf{cross-limb transition}. The generator handles this by exiting the target region's current state and entering the new target, while the source region remains unaffected.
 
-\begin{lstlisting}[language=YAML]
-# Parent State
+\subsection{Joining (Synchronization)}
+To ``join'' parallel states, place a transition on the \textbf{parent} that checks the status of the \textbf{children}.
+
+\begin{lstlisting}[language=YAML, caption={Join pattern (Rust guards)}]
 main_task:
   orthogonal: true
   states:
     A:
+      initial: working
       states:
         working:
           transitions:
-            - guard: done
+            - guard: ctx.done_a
               to: finished
-        finished: {} # Idle wait state
+        finished: {}
     B:
-      # ... similar logic ...
-  
-  # Transition on the Parent Container
+      initial: working
+      states:
+        working:
+          transitions:
+            - guard: ctx.done_b
+              to: finished
+        finished: {}
+
+  # Transition on the parent container
   transitions:
-    - guard: ctx.in_state_A_finished() && ctx.in_state_B_finished()
+    - guard: IN_STATE(root_main_task_A_finished) && IN_STATE(root_main_task_B_finished)
       to: next_step
 \end{lstlisting}
 
+\textbf{Note:} Use the \texttt{IN\_STATE(X)} macro in guards for portable state checks. In Rust, it expands to \texttt{ctx.in\_state\_X()}. In C, it expands to the \texttt{IN\_STATE\_X} macro.
+
 \section{Decisions (Logic Trees)}
+\label{sec:decisions}
 Decisions allow you to externalize branching logic. A decision node can point to states, or \textbf{chain to other decisions}.
 
 \textbf{Restriction:} You cannot use \texttt{action} or \texttt{hooks} inside a decision block. Actions must be placed on the transition \textit{leading to} the decision, or on the state transitions following it.
 
-\textbf{1. Define the Decision (Root Level):}
-\begin{lstlisting}[language=YAML]
+\subsection{Defining Decisions}
+Decisions can be defined at the root level or within any state. They are collected into a flat namespace, so names must be unique across the entire model.
+
+\begin{lstlisting}[language=YAML, caption={Decision tree definition}]
 decisions:
   validate_input:
     - guard: ctx.input < 0
       to: /error/negative
     - guard: ctx.input > 100
-      to: check_permissions # Chaining to another decision
-    - to: /process/calc     # Default
+      to: "@check_permissions"   # Chain to another decision
+    - to: /process/calc          # Default (no guard)
 
   check_permissions:
     - guard: ctx.is_admin
@@ -295,11 +543,74 @@ decisions:
     - to: /error/denied
 \end{lstlisting}
 
-\textbf{2. Use the Decision:}
-\begin{lstlisting}[language=YAML]
+\subsection{Using Decisions}
+Reference a decision with the \texttt{@} prefix in the \texttt{to:} field:
+
+\begin{lstlisting}[language=YAML, caption={Using a decision in a transition}]
 transitions:
   - guard: ctx.data_ready
-    to: validate_input
+    to: "@validate_input"
+\end{lstlisting}
+
+Decisions can also be defined locally within a state:
+
+\begin{lstlisting}[language=YAML, caption={Local decision definition}]
+my_state:
+  decisions:
+    local_check:
+      - guard: ctx.x > 0
+        to: positive
+      - to: negative
+  initial: waiting
+  states:
+    waiting:
+      transitions:
+        - to: "@local_check"
+    positive: {}
+    negative: {}
+\end{lstlisting}
+
+\section{Complete Example}
+Below is a minimal but complete SMB file demonstrating the key features, with Rust as the target language.
+
+\begin{lstlisting}[language=YAML, caption={Complete SMB example (Rust)}]
+lang: rust
+
+includes: |
+  fn log(msg: &str) { println!("{}", msg); }
+
+context: |
+  pub counter: i32,
+
+context_init: |
+  counter: 0,
+
+hooks:
+  entry: |
+    println!("Entering {}", state_full_name);
+  exit: |
+    println!("Exiting {}", state_full_name);
+
+initial: active
+
+states:
+  active:
+    initial: idle
+    states:
+      idle:
+        transitions:
+          - guard: ctx.counter >= 3
+            to: working
+      working:
+        do: |
+          ctx.counter += 1;
+        transitions:
+          - guard: ctx.counter >= 10
+            to: null   # Terminate
+
+  error:
+    entry: |
+      log("ERROR STATE");
 \end{lstlisting}
 
 \end{document}

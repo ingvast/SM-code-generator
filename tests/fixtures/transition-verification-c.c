@@ -12,7 +12,7 @@ int main(void) {
     sm_get_state_str(&sm, state_buf, sizeof(state_buf));
     printf("%s\n", state_buf);
 
-    while (sm.ctx.do_loop) {
+    while (sm_is_running(&sm)) {
         sm_tick(&sm);
         sm.ctx.counter += 1;
         sm_get_state_str(&sm, state_buf, sizeof(state_buf));

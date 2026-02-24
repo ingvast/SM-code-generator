@@ -121,16 +121,50 @@ def validate_model(data):
         sys.exit(1)
     print("Model OK.")
 
+SUPPORTED_LANGS = ['c', 'rust']
+
+
+def generate_lang(lang, data, output_base):
+    """Generate code for a single language.
+
+    Args:
+        lang: Target language ('c', 'rust').
+        data: Parsed YAML model.
+        output_base: Full path without extension (e.g. '/tmp/statemachine').
+    """
+    basename = os.path.basename(output_base)
+
+    if lang == 'c':
+        from codegen.c_lang import CGenerator
+        print("Generating C code...")
+        gen = CGenerator(data, header_name=f"{basename}.h")
+        header, source = gen.generate()
+        h_path = output_base + ".h"
+        c_path = output_base + ".c"
+        with open(h_path, "w") as f: f.write(header)
+        with open(c_path, "w") as f: f.write(source)
+        print(f" -> {c_path} / .h created.")
+
+    elif lang == 'rust':
+        print("Generating Rust code...")
+        gen = RustGenerator(data)
+        source, _ = gen.generate()
+        rs_path = output_base + ".rs"
+        with open(rs_path, "w") as f: f.write(source)
+        print(f" -> {rs_path} created.")
+
+    else:
+        print(f"WARNING: Unknown language '{lang}', skipping.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="State Machine Builder")
-    parser.add_argument("file", help="Input YAML file")
-    parser.add_argument("--lang", choices=['c', 'rust'], default='rust', help="Output language")
-    parser.add_argument("-o", "--output", default=".", help="Output directory for generated files (default: current directory)")
+    parser.add_argument("file", help="Input YAML/SMB file")
+    parser.add_argument("--lang", choices=SUPPORTED_LANGS, default=None,
+                        help="Output language (default: read from 'lang' key in SMB file)")
+    parser.add_argument("-o", "--output", default=None,
+                        help="Output base path without extension (default: ./statemachine)")
     args = parser.parse_args()
-
-    output_dir = args.output
-    if not os.path.isdir(output_dir):
-        os.makedirs(output_dir, exist_ok=True)
 
     if not os.path.exists(args.file):
         sys.exit(f"Error: File '{args.file}' not found.")
@@ -141,6 +175,31 @@ def main():
     except yaml.YAMLError as e:
         sys.exit(f"YAML Syntax Error: {e}")
 
+    # Determine output base path
+    if args.output:
+        output_base = args.output
+    else:
+        output_base = os.path.join(".", "statemachine")
+
+    # Ensure parent directory exists
+    output_dir = os.path.dirname(output_base)
+    if output_dir and not os.path.isdir(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
+    # Determine which languages to generate
+    if args.lang:
+        languages = [args.lang]
+    else:
+        file_lang = data.get('lang', 'rust')
+        if isinstance(file_lang, str):
+            languages = [file_lang]
+        else:
+            languages = list(file_lang)
+
+    for lang in languages:
+        if lang not in SUPPORTED_LANGS:
+            sys.exit(f"Error: Unsupported language '{lang}'. Supported: {', '.join(SUPPORTED_LANGS)}")
+
     collect_decisions(data)
     validate_model(data)
 
@@ -149,30 +208,14 @@ def main():
     try:
         print(f"Generating Graphviz DOT...")
         dot_content = generate_dot(data, decisions)
-        dot_path = os.path.join(output_dir, "statemachine.dot")
+        dot_path = output_base + ".dot"
         with open(dot_path, "w") as f:
             f.write(dot_content)
         print(f" -> {dot_path} created.")
 
-        if args.lang == 'c':
-            from codegen.c_lang import CGenerator
-            print("Generating C code...")
-            gen = CGenerator(data)
-            header, source = gen.generate()
-            h_path = os.path.join(output_dir, "statemachine.h")
-            c_path = os.path.join(output_dir, "statemachine.c")
-            with open(h_path, "w") as f: f.write(header)
-            with open(c_path, "w") as f: f.write(source)
-            print(f" -> {c_path} / .h created.")
+        for lang in languages:
+            generate_lang(lang, data, output_base)
 
-        elif args.lang == 'rust':
-            print("Generating Rust code...")
-            gen = RustGenerator(data)
-            source, _ = gen.generate()
-            rs_path = os.path.join(output_dir, "statemachine.rs")
-            with open(rs_path, "w") as f: f.write(source)
-            print(f" -> {rs_path} created.")
-            
     except Exception as e:
         print(f"\nCRITICAL ERROR during generation: {e}")
         import traceback

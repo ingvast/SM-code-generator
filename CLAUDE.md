@@ -4,19 +4,21 @@
 
 **SM-code-generator** (aka sm-compiler) is a Python-based code generator that takes a YAML/SMB state machine definition (produced by the SM-GUI editor at `../SM-gui`) and generates executable Hierarchical State Machine (HSM) code plus a Graphviz DOT visualization.
 
-The tool is designed to support multiple output languages. Currently **Rust is fully implemented and up-to-date**; a **C backend exists but is outdated** and not in sync with the current YAML schema.
+The tool is designed to support multiple output languages. Currently **Rust and C are fully implemented and up-to-date**.
 
 ## Commands
 
 ```bash
-# Run the compiler (Rust output, default)
+# Generate code (language read from 'lang:' key in .smb file)
+uv run python sm-compiler.py model.smb
+
+# Override language
 uv run python sm-compiler.py model.smb --lang rust
+uv run python sm-compiler.py model.smb --lang c
 
-# Run the compiler with custom output directory
-uv run python sm-compiler.py model.smb --lang rust -o /path/to/output
-
-# Run the compiler (C output - outdated)
-uv run python sm-compiler.py model.yaml --lang c
+# Custom output base path (extensions added automatically)
+# Produces /path/to/myfsm.rs, /path/to/myfsm.dot, etc.
+uv run python sm-compiler.py model.smb -o /path/to/myfsm
 
 # Run the test suite
 uv run pytest
@@ -40,7 +42,7 @@ codegen/
   base_lang.py          # Abstract BaseGenerator: shared init, recurse, emit_transition_logic, gen_inspector
   common.py             # Shared utilities: path resolution, DOT generation, LCA/exit/entry sequences
   rust_lang.py          # Rust code generator (extends BaseGenerator, templates + assemble_output)
-  c_lang.py             # C code generator (outdated, standalone, does not yet use BaseGenerator)
+  c_lang.py             # C code generator (extends BaseGenerator, templates + assemble_output)
 ```
 
 ### Pipeline
@@ -53,7 +55,9 @@ codegen/
 
 ### Code Generation Pattern
 
-The `BaseGenerator` (`codegen/base_lang.py`) implements a template-method pattern. It provides the shared algorithmic skeleton — `__init__`, `generate`, `recurse`, `emit_transition_logic`, `gen_inspector` — while subclasses supply language-specific templates (as class attributes) and implement `assemble_output()` for final source assembly. `RustGenerator` inherits from `BaseGenerator`; `CGenerator` is standalone pending its update to the current schema.
+The `BaseGenerator` (`codegen/base_lang.py`) implements a template-method pattern. It provides the shared algorithmic skeleton — `__init__`, `generate`, `recurse`, `emit_transition_logic`, `gen_inspector` — while subclasses supply language-specific templates (as class attributes) and implement `assemble_output()` for final source assembly. Both `RustGenerator` and `CGenerator` inherit from `BaseGenerator`.
+
+`BaseGenerator` also defines overridable **syntax hook methods** (`fmt_if_open`, `fmt_set_fn`, `fmt_opt_call`, `fmt_guard_expand`, etc.) that abstract language-specific syntax differences (e.g., Rust `if let Some(f) = ctx.ptr { f(ctx); }` vs C `if (ctx->ptr) ctx->ptr(ctx);`). This allows the core transition logic, orthogonal region handling, and inspector generation to be fully shared.
 
 The generator recursively walks the state tree (`recurse()`), producing for each state:
 - **Leaf states**: `_start`, `_entry`, `_exit`, `_do` functions
@@ -61,7 +65,7 @@ The generator recursively walks the state tree (`recurse()`), producing for each
 - **Composite states (AND/orthogonal)**: same plus parallel region entry/exit/tick with safety checks
 - **Inspector functions**: for runtime state path introspection (`get_state_str()`)
 
-State machine uses **function pointers** (`Option<StateFn>`) stored in a `Context` struct to track active states at each hierarchy level. Transitions compute exit/entry sequences based on **Least Common Ancestor (LCA)**.
+State machine uses **function pointers** (Rust: `Option<StateFn>`, C: `StateFunc`) stored in a `Context` struct to track active states at each hierarchy level. Transitions compute exit/entry sequences based on **Least Common Ancestor (LCA)**.
 
 ### Key YAML/SMB Schema Keywords
 
@@ -101,28 +105,28 @@ State machine uses **function pointers** (`Option<StateFn>`) stored in a `Contex
 4. Execute exit sequence (leaf to LCA, bottom-up)
 5. Execute entry sequence (LCA to target, top-down)
 
-## C Backend Status
+## C Backend Notes
 
-The C generator (`c_lang.py`) is **outdated**:
-- Uses old keywords: `test` instead of `guard`, `transfer_to` instead of `to`, `run` instead of `do`, `parallel` instead of `orthogonal`
-- Missing features: `@decision` prefix syntax, fork targets, cross-limb orthogonal transitions, `context_init`, transition hooks with `t_src`/`t_dst`
-- The `first.yaml` example file uses old C-style schema
+The C generator produces a `.h` header and `.c` source file. Key differences from Rust:
+- Uses `SM_Context*` pointer syntax (`ctx->field`) instead of reference (`ctx.field`)
+- Function pointers are `StateFunc` (typedef) instead of `Option<StateFn>`
+- `IN_STATE` checks use C macros (`#define IN_STATE_X (ctx->ptr == fn)`) instead of Rust impl methods
+- `context_init` should contain C assignment statements executed after `memset` in `sm_init()` (e.g., `sm->ctx.field = value;`)
+- The `first.yaml` example file uses old C-style schema and is not compatible with the current generator
 
 ## Improvement Ideas
 
 ### High Priority
-1. **Bring C backend up to date** with current schema (rename keywords, add missing features). Once updated, refactor `CGenerator` to inherit from `BaseGenerator`.
-2. **Add Python backend** - next planned target language (extend `BaseGenerator`)
+1. **Add Python backend** - next planned target language (extend `BaseGenerator`)
 
 ### Medium Priority
-3. **Input file format**: The tool accepts both `.yaml` and `.smb` files but treats them identically. Consider formally defining `.smb` as the canonical extension.
-4. **Error messages**: Validation errors could include line numbers from the YAML source for better debugging.
-5. **Self-transition (`.`) handling**: `resolve_target_path` returns `current_path` for `.`, which causes LCA to be at the state itself. Verify this produces correct exit+re-enter behavior in all cases.
+2. **Input file format**: The tool accepts both `.yaml` and `.smb` files but treats them identically. Consider formally defining `.smb` as the canonical extension.
+3. **Error messages**: Validation errors could include line numbers from the YAML source for better debugging.
+4. **Self-transition (`.`) handling**: `resolve_target_path` returns `current_path` for `.`, which causes LCA to be at the state itself. Verify this produces correct exit+re-enter behavior in all cases.
 
 ### Low Priority
-6. **`get_state_data` duplication**: Both `sm-compiler.py` and `common.py` have `get_state_data`/`resolve_state_data` doing the same thing.
-7. **Guard macro expansion**: `IN_STATE(X)` is expanded to `ctx.in_state_X()` via regex in Rust. This should be language-specific and handled in the generator, not hardcoded.
-8. **Makefile** is configured for C workflow; the Rust workflow uses `compileRun` script instead.
+5. **`get_state_data` duplication**: Both `sm-compiler.py` and `common.py` have `get_state_data`/`resolve_state_data` doing the same thing.
+6. **Makefile** is configured for C workflow; the Rust workflow uses `compileRun` script instead.
 
 ## Test Suite
 
@@ -157,7 +161,7 @@ Adding a new language: add an entry to `LANG_PIPELINE` in `test_integration.py` 
 | Fixture | Language | Status |
 |---------|----------|--------|
 | `transition-verification-rust` | Rust | Passing — covers all transition types |
-| `transition-verification-c` | C | Failing — C backend is outdated |
+| `transition-verification-c` | C | Passing — covers all transition types |
 
 ## Related Projects
 

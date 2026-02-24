@@ -30,27 +30,27 @@ FIXTURES = Path(__file__).parent / "fixtures"
 # ---------------------------------------------------------------------------
 # Language pipeline definitions
 #
-# generated_file: filename the compiler writes (always in cwd / tmp_path)
-# driver_ext:     extension of the hand-written driver in fixtures/
-# compile:        callable(driver_src, exe) -> argv list, or None
-# run:            callable(driver_src, exe) -> argv list
+# gen_ext:    extension(s) appended to the -o base path by the compiler
+# driver_ext: extension of the hand-written driver in fixtures/
+# compile:    callable(driver_src, exe, base) -> argv list, or None
+# run:        callable(driver_src, exe) -> argv list
 # ---------------------------------------------------------------------------
 
 LANG_PIPELINE = {
     "rust": {
-        "generated_file": "statemachine.rs",
+        "gen_ext": ".rs",
         "driver_ext": ".rs",
-        "compile": lambda driver, exe: ["rustc", str(driver), "-o", str(exe)],
+        "compile": lambda driver, exe, base: ["rustc", str(driver), "-o", str(exe)],
         "run": lambda driver, exe: [str(exe)],
     },
     "c": {
-        "generated_file": "statemachine.c",
+        "gen_ext": ".c",
         "driver_ext": ".c",
-        "compile": lambda driver, exe: ["gcc", str(driver), str(driver.parent / "statemachine.c"), "-o", str(exe)],
+        "compile": lambda driver, exe, base: ["gcc", str(driver), str(base) + ".c", "-o", str(exe)],
         "run": lambda driver, exe: [str(exe)],
     },
     "python": {
-        "generated_file": "statemachine.py",
+        "gen_ext": ".py",
         "driver_ext": ".py",
         "compile": None,
         "run": lambda driver, exe: [sys.executable, str(driver)],
@@ -78,6 +78,7 @@ def run_pipeline(smb_file: str, lang: str, tmp_path: Path) -> list[str]:
     stem = Path(smb_file).stem
     smb_path = FIXTURES / smb_file
     exe_path = tmp_path / stem
+    output_base = tmp_path / "statemachine"
 
     # Step 1: Copy driver into tmp_path
     driver_src = FIXTURES / f"{stem}{pipeline['driver_ext']}"
@@ -87,16 +88,17 @@ def run_pipeline(smb_file: str, lang: str, tmp_path: Path) -> list[str]:
 
     # Step 2: Generate state machine source into tmp_path
     result = subprocess.run(
-        [sys.executable, str(ROOT / "sm-compiler.py"), str(smb_path), "--lang", lang],
-        capture_output=True, text=True, cwd=tmp_path,
+        [sys.executable, str(ROOT / "sm-compiler.py"), str(smb_path),
+         "--lang", lang, "-o", str(output_base)],
+        capture_output=True, text=True,
     )
     assert result.returncode == 0, f"sm-compiler.py failed:\n{result.stderr}"
-    generated = tmp_path / pipeline["generated_file"]
+    generated = tmp_path / ("statemachine" + pipeline["gen_ext"])
     assert generated.exists(), f"Compiler did not produce {generated.name}"
 
     # Step 3: Compile
     if pipeline["compile"]:
-        cmd = pipeline["compile"](driver_tmp, exe_path)
+        cmd = pipeline["compile"](driver_tmp, exe_path, output_base)
         result = subprocess.run(cmd, capture_output=True, text=True)
         assert result.returncode == 0, f"Compilation failed:\n{result.stderr}"
 

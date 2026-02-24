@@ -32,6 +32,85 @@ class BaseGenerator(ABC):
              self.hooks['transition'] = data['transition']
         self.includes = data.get('includes', '')
 
+    # --- Language-specific syntax hooks (override in subclasses) ---
+
+    def fmt_if_open(self, cond):
+        """Format an if-statement opening. Default: Rust syntax."""
+        return f"if {cond} {{"
+
+    def fmt_str_var(self, name, value):
+        """Declare a string variable. Default: Rust syntax."""
+        return f'let {name} = "{value}";'
+
+    def fmt_set_flag(self, flag, value):
+        """Set a context flag. Default: Rust syntax."""
+        return f"ctx.{flag} = {value};"
+
+    def fmt_opt_call(self, ptr):
+        """Call a function pointer if set. Default: Rust syntax."""
+        return f"if let Some(exit_fn) = ctx.{ptr} {{ exit_fn(ctx); }}"
+
+    def fmt_set_fn(self, ptr, fn_name):
+        """Set a function pointer. Default: Rust syntax."""
+        return f"ctx.{ptr} = Some({fn_name});"
+
+    def fmt_clear_fn(self, ptr):
+        """Clear a function pointer. Default: Rust syntax."""
+        return f"ctx.{ptr} = None;"
+
+    def fmt_ptr_decl(self, name):
+        """Declare a function pointer field. Default: Rust syntax."""
+        return f"pub {name}: Option<StateFn>,"
+
+    def fmt_ptr_init(self, name):
+        """Initialize a function pointer field. Default: Rust syntax."""
+        return f"{name}: None,"
+
+    def fmt_ptr_eq(self, ptr, fn_name):
+        """Check if a function pointer equals a function. Default: Rust syntax."""
+        return f"ctx.{ptr}.map(|f| f as usize) == Some({fn_name} as usize)"
+
+    def fmt_safety_check(self, c_name, has_parent):
+        """Format a safety check for orthogonal regions. Default: Rust syntax."""
+        if has_parent:
+            return f"if !ctx.in_state_{c_name}() || ctx.transition_fired {{ return; }}"
+        else:
+            return f"if ctx.transition_fired {{ return; }}"
+
+    def fmt_guard_expand(self, guard_str):
+        """Expand IN_STATE(...) macros in guard conditions. Default: Rust syntax."""
+        return re.sub(r'IN_STATE\(([\w_]+)\)', r'ctx.in_state_\1()', guard_str)
+
+    def gen_in_state_impl(self, c_name, parent_run_ptr):
+        """Generate in_state check (Rust: impl method, C: macro). Default: Rust."""
+        method = f"""
+        pub fn in_state_{c_name}(&self) -> bool {{
+            self.{parent_run_ptr}.map(|f| f as usize) == Some(state_{c_name}_do as usize)
+        }}"""
+        self.outputs['impls'].append(method)
+
+    def fmt_opt_call_region_exit(self, region_exit_ptr):
+        """Call a region exit function pointer if set. Default: Rust syntax."""
+        return f"if let Some(f) = ctx.{region_exit_ptr} {{ f(ctx); }}"
+
+    def fmt_tick_child(self, child_c_name):
+        """Call a child's do function. Default: direct call."""
+        return f"state_{child_c_name}_do(ctx);"
+
+    def fmt_inspect_push(self, text):
+        """Push a string in the inspector. Default: Rust syntax."""
+        return f'buf.push_str("{text}");'
+
+    def fmt_inspect_call(self, func_name):
+        """Call an inspector function. Default: Rust syntax."""
+        return f"{func_name}(ctx, buf);"
+
+    def fmt_inspect_ptr_eq(self, ptr, fn_name):
+        """Check function pointer equality in inspector. Default: Rust syntax."""
+        return f"ctx.{ptr}.map(|f| f as usize) == Some({fn_name} as usize)"
+
+    # --- End syntax hooks ---
+
     def _fmt_func(self, path):
         """Format an exit function name for the given state path."""
         return "state_" + flatten_name(path, "_") + "_exit"
@@ -75,9 +154,9 @@ class BaseGenerator(ABC):
         elif test_val is False: test_cond = "false"
         else: test_cond = str(test_val)
 
-        test_cond = re.sub(r'IN_STATE\(([\w_]+)\)', r'ctx.in_state_\1()', test_cond)
+        test_cond = self.fmt_guard_expand(test_cond)
 
-        code += f"{indent}if {test_cond} {{\n"
+        code += f"{indent}{self.fmt_if_open(test_cond)}\n"
 
         src_str = "/" + "/".join(name_path[1:])
         dst_str = "???"
@@ -101,13 +180,13 @@ class BaseGenerator(ABC):
 
         hook_code = self.hooks.get('transition', '')
         if not is_decision:
-             code += f'{indent}    let t_src = "{src_str}";\n'
-             code += f'{indent}    let t_dst = "{dst_str}";\n'
+             code += f'{indent}    {self.fmt_str_var("t_src", src_str)}\n'
+             code += f'{indent}    {self.fmt_str_var("t_dst", dst_str)}\n'
              if hook_code:
                  formatted_hook = "\n".join([f"{indent}    {line}" for line in hook_code.splitlines()])
                  code += formatted_hook + "\n"
 
-        code += f"{indent}    ctx.transition_fired = true;\n"
+        code += f"{indent}    {self.fmt_set_flag('transition_fired', 'true')}\n"
 
         action_code = t.get('action')
         if action_code:
@@ -118,7 +197,7 @@ class BaseGenerator(ABC):
             exit_funcs = get_exit_sequence(name_path, ['root'], self._fmt_func)
             code += "".join([f"{indent}    {fn}(ctx);\n" for fn in exit_funcs])
             code += f"{indent}    state_root_exit(ctx);\n"
-            code += f"{indent}    ctx.terminated = true;\n"
+            code += f"{indent}    {self.fmt_set_flag('terminated', 'true')}\n"
             code += f"{indent}    return;\n"
 
         elif is_decision:
@@ -156,10 +235,10 @@ class BaseGenerator(ABC):
                         is_targeting_deeper = len(target_path) > len(target_limb_path)
 
                         if is_composite_limb and is_targeting_deeper:
-                            code += f"{indent}    if let Some(exit_fn) = ctx.ptr_{target_limb_c_name}_exit {{ exit_fn(ctx); }}\n"
+                            code += f"{indent}    {self.fmt_opt_call(f'ptr_{target_limb_c_name}_exit')}\n"
                             entry_source = target_limb_path
                         else:
-                            code += f"{indent}    if let Some(exit_fn) = ctx.ptr_{target_limb_c_name}_region_exit {{ exit_fn(ctx); }}\n"
+                            code += f"{indent}    {self.fmt_opt_call(f'ptr_{target_limb_c_name}_region_exit')}\n"
                             entry_source = container_path
 
                         # 3. Entry Sequence
@@ -208,7 +287,7 @@ class BaseGenerator(ABC):
                  my_data = resolve_state_data(self.data, name_path)
                  if my_data and 'states' in my_data and not my_data.get('orthogonal', False):
                       my_c_name = flatten_name(name_path, "_")
-                      code += f"{indent}    if let Some(exit_fn) = ctx.ptr_{my_c_name}_exit {{ exit_fn(ctx); }}\n"
+                      code += f"{indent}    {self.fmt_opt_call(f'ptr_{my_c_name}_exit')}\n"
 
             # --- Standard Exit Sequence ---
             exit_funcs = get_exit_sequence(name_path, target_path, self._fmt_func)
@@ -266,24 +345,20 @@ class BaseGenerator(ABC):
             parent_hist_ptr = parent_ptrs[2] if parent_ptrs else None
 
             if parent_run_ptr:
-                method = f"""
-        pub fn in_state_{my_c_name}(&self) -> bool {{
-            self.{parent_run_ptr}.map(|f| f as usize) == Some(state_{my_c_name}_do as usize)
-        }}"""
-                self.outputs['impls'].append(method)
+                self.gen_in_state_impl(my_c_name, parent_run_ptr)
 
             set_parent_code = ""
             clear_parent_code = ""
 
             if parent_run_ptr:
-                set_parent_code += f"ctx.{parent_run_ptr} = Some(state_{my_c_name}_do);\n    "
-                set_parent_code += f"ctx.{parent_exit_ptr} = Some(state_{my_c_name}_exit);"
+                set_parent_code += f"{self.fmt_set_fn(parent_run_ptr, f'state_{my_c_name}_do')}\n    "
+                set_parent_code += self.fmt_set_fn(parent_exit_ptr, f'state_{my_c_name}_exit')
 
                 if parent_hist_ptr:
-                    set_parent_code += f"\n    ctx.{parent_hist_ptr} = Some(state_{my_c_name}_entry);"
+                    set_parent_code += f"\n    {self.fmt_set_fn(parent_hist_ptr, f'state_{my_c_name}_entry')}"
 
-                clear_parent_code += f"ctx.{parent_run_ptr} = None;\n    "
-                clear_parent_code += f"ctx.{parent_exit_ptr} = None;"
+                clear_parent_code += f"{self.fmt_clear_fn(parent_run_ptr)}\n    "
+                clear_parent_code += self.fmt_clear_fn(parent_exit_ptr)
 
             trans_code = ""
             for i, t in enumerate(data.get('transitions', [])):
@@ -301,10 +376,7 @@ class BaseGenerator(ABC):
 
             if is_composite:
                 if is_parallel:
-                    if parent_run_ptr:
-                        safety_check = f"if !ctx.in_state_{my_c_name}() || ctx.transition_fired {{ return; }}"
-                    else:
-                        safety_check = f"if ctx.transition_fired {{ return; }}"
+                    safety_check = self.fmt_safety_check(my_c_name, parent_run_ptr is not None)
 
                     p_entries, p_exits, p_ticks = "", "", ""
                     for child_name, child_data in data['states'].items():
@@ -314,14 +386,14 @@ class BaseGenerator(ABC):
                         region_ptr = f"ptr_{child_c_name}_region"
                         region_exit_ptr = f"{region_ptr}_exit"
 
-                        self.outputs['context_ptrs'].append(f"pub {region_ptr}: Option<StateFn>,")
-                        self.outputs['context_ptrs'].append(f"pub {region_exit_ptr}: Option<StateFn>,")
-                        self.outputs['context_init'].append(f"{region_ptr}: None,")
-                        self.outputs['context_init'].append(f"{region_exit_ptr}: None,")
+                        self.outputs['context_ptrs'].append(self.fmt_ptr_decl(region_ptr))
+                        self.outputs['context_ptrs'].append(self.fmt_ptr_decl(region_exit_ptr))
+                        self.outputs['context_init'].append(self.fmt_ptr_init(region_ptr))
+                        self.outputs['context_init'].append(self.fmt_ptr_init(region_exit_ptr))
 
                         p_entries += f"    state_{child_c_name}_entry(ctx);\n"
-                        p_exits += f"    if let Some(f) = ctx.{region_exit_ptr} {{ f(ctx); }}\n"
-                        p_ticks += f"    state_{child_c_name}_do(ctx);\n"
+                        p_exits += f"    {self.fmt_opt_call_region_exit(region_exit_ptr)}\n"
+                        p_ticks += f"    {self.fmt_tick_child(child_c_name)}\n"
                         if safety_check:
                             p_ticks += f"    {safety_check}\n"
 
@@ -342,13 +414,13 @@ class BaseGenerator(ABC):
                     my_exit_ptr = f"{my_ptr}_exit"
                     my_hist = f"hist_{my_c_name}"
 
-                    self.outputs['context_ptrs'].append(f"pub {my_ptr}: Option<StateFn>,")
-                    self.outputs['context_ptrs'].append(f"pub {my_exit_ptr}: Option<StateFn>,")
-                    self.outputs['context_ptrs'].append(f"pub {my_hist}: Option<StateFn>,")
+                    self.outputs['context_ptrs'].append(self.fmt_ptr_decl(my_ptr))
+                    self.outputs['context_ptrs'].append(self.fmt_ptr_decl(my_exit_ptr))
+                    self.outputs['context_ptrs'].append(self.fmt_ptr_decl(my_hist))
 
-                    self.outputs['context_init'].append(f"{my_ptr}: None,")
-                    self.outputs['context_init'].append(f"{my_exit_ptr}: None,")
-                    self.outputs['context_init'].append(f"{my_hist}: None,")
+                    self.outputs['context_init'].append(self.fmt_ptr_init(my_ptr))
+                    self.outputs['context_init'].append(self.fmt_ptr_init(my_exit_ptr))
+                    self.outputs['context_init'].append(self.fmt_ptr_init(my_hist))
 
                     init_target = flatten_name(name_path + [data['initial']], "_")
                     hist_bool = "true" if data.get('history', False) else "false"
@@ -385,21 +457,21 @@ class BaseGenerator(ABC):
     def gen_inspector(self, name_path, data, ptr_name_struct):
         my_c_name = flatten_name(name_path, "_")
         disp_name = "" if name_path == ['root'] else name_path[-1]
-        push_name = f'buf.push_str("{disp_name}");' if disp_name else ""
+        push_name = self.fmt_inspect_push(disp_name) if disp_name else ""
         content = ""
 
         is_composite = 'states' in data
         if is_composite:
             if data.get('orthogonal', False):
-                content += 'buf.push_str("/[");\n'
+                content += f'{self.fmt_inspect_push("/[")}\n'
                 children = list(data['states'].items())
                 for i, (child_name, child_data) in enumerate(children):
                     child_path = name_path + [child_name]
                     child_func = f"inspect_{flatten_name(child_path, '_')}"
                     self.gen_inspector(child_path, child_data, None)
-                    content += f"    {child_func}(ctx, buf);\n"
-                    if i < len(children)-1: content += '    buf.push_str(",");\n'
-                content += 'buf.push_str("]");\n'
+                    content += f"    {self.fmt_inspect_call(child_func)}\n"
+                    if i < len(children)-1: content += f'    {self.fmt_inspect_push(",")}\n'
+                content += f'{self.fmt_inspect_push("]")}\n'
             else:
                 my_ptr = f"ptr_{my_c_name}"
                 for child_name, child_data in data['states'].items():
@@ -408,9 +480,9 @@ class BaseGenerator(ABC):
                 for child_name, child_data in data['states'].items():
                     c_name = flatten_name(name_path + [child_name], "_")
                     else_txt = "else " if not first else ""
-                    content += f"    {else_txt}if ctx.{my_ptr}.map(|f| f as usize) == Some(state_{c_name}_do as usize) {{\n"
-                    content += f'        buf.push_str("/");\n'
-                    content += f"        inspect_{c_name}(ctx, buf);\n"
+                    content += f"    {else_txt}{self.fmt_if_open(self.fmt_inspect_ptr_eq(my_ptr, f'state_{c_name}_do'))}\n"
+                    content += f'        {self.fmt_inspect_push("/")}\n'
+                    content += f"        {self.fmt_inspect_call(f'inspect_{c_name}')}\n"
                     content += "    }\n"
                     first = False
 
