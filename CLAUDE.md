@@ -15,17 +15,19 @@ uv run python sm-compiler.py model.smb --lang rust
 # Run the compiler (C output - outdated)
 uv run python sm-compiler.py model.yaml --lang c
 
-# Compile and run generated Rust code
-./compileRun transition-verification.smb
+# Run the test suite
+uv run pytest
+uv run pytest -v          # verbose
+uv run pytest -x          # stop on first failure
 
-# Verify output against expected
-./verify.sh transition-verification transition-verification.expect
+# Compile and run generated Rust code manually
+./compileRun transition-verification-rust.smb
 
 # View state machine diagram
 dot -Tpng statemachine.dot -o statemachine.png && open statemachine.png
 ```
 
-Python 3.14, managed with `uv`. Single dependency: `pyyaml`.
+Python 3.14, managed with `uv`. Dependencies: `pyyaml`, `pytest` (dev).
 
 ## Architecture
 
@@ -114,10 +116,44 @@ The C generator (`c_lang.py`) is **outdated**:
 7. **Self-transition (`.`) handling**: `resolve_target_path` returns `current_path` for `.`, which causes LCA to be at the state itself. Verify this produces correct exit+re-enter behavior in all cases.
 
 ### Low Priority
-8. **Test suite**: No automated tests exist. The `verify.sh` script does line-by-line comparison of expected output but isn't integrated into a test framework.
-9. **`get_state_data` duplication**: Both `sm-compiler.py` and `common.py` have `get_state_data`/`resolve_state_data` doing the same thing.
-10. **Guard macro expansion**: `IN_STATE(X)` is expanded to `ctx.in_state_X()` via regex in Rust. This should be language-specific and handled in the generator, not hardcoded.
-11. **Makefile** is configured for C workflow; the Rust workflow uses `compileRun` script instead.
+8. **`get_state_data` duplication**: Both `sm-compiler.py` and `common.py` have `get_state_data`/`resolve_state_data` doing the same thing.
+9. **Guard macro expansion**: `IN_STATE(X)` is expanded to `ctx.in_state_X()` via regex in Rust. This should be language-specific and handled in the generator, not hardcoded.
+10. **Makefile** is configured for C workflow; the Rust workflow uses `compileRun` script instead.
+
+## Test Suite
+
+Integration tests live in `tests/` and are run with `uv run pytest`.
+
+### Structure
+
+```
+tests/
+  test_integration.py       # test runner and pipeline helpers
+  fixtures/
+    <name>.smb              # state machine definition (contains `lang:` field)
+    <name>.rs / .c / .py   # hand-written driver program for that language
+    <name>.expect           # expected stdout output
+```
+
+### How it works
+
+Each `.smb` fixture declares which languages to test via a `lang:` key (string or list). The test runner:
+1. Reads `lang:` from the `.smb` file and parametrizes one test per language
+2. Copies the driver to a temporary directory
+3. Runs `sm-compiler.py` to generate the state machine source into the same temp dir
+4. Compiles (if needed) and runs the program
+5. Compares stdout line-by-line against `<name>.expect`
+
+Adding a new test: create `<name>.smb`, `<name>.<ext>` (driver), and `<name>.expect` in `fixtures/`, then add a `test_<name>()` function in `test_integration.py`.
+
+Adding a new language: add an entry to `LANG_PIPELINE` in `test_integration.py` describing how to compile and run that language.
+
+### Current fixtures
+
+| Fixture | Language | Status |
+|---------|----------|--------|
+| `transition-verification-rust` | Rust | Passing — covers all transition types |
+| `transition-verification-c` | C | Failing — C backend is outdated |
 
 ## Related Projects
 
