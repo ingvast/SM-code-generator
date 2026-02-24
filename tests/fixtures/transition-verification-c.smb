@@ -13,44 +13,44 @@ lang: c
 #
 
 includes: |
-  fn p( s : &str) {
-    println!("{}", s);
+  void p(const char* s) {
+    printf("%s\n", s);
   }
-  fn finish(ctx: &mut Context) {
-    ctx.do_loop = false;
+  void finish(SM_Context* ctx) {
+    ctx->do_loop = false;
   }
-  
 
-# Rust-specific fields
+
+# C-specific fields
 context: |
-    pub counter: i32,
-    pub do_loop: bool,
+    int counter;
+    bool do_loop;
 
-# How to initialize the above fields in StateMachine::new()
+# How to initialize the above fields
 context_init: |
-    counter: 00,
-    do_loop: true,
+    .counter = 0,
+    .do_loop = true,
 
 hooks:
   entry: |
-    println!( "{:02}: Entry: {}", ctx.counter, state_full_name.to_string() );
-    
+    printf("%02d: Entry: %s\n", ctx->counter, state_full_name);
+
   exit: |
-    println!("{:02}: Exit: {}", ctx.counter, state_full_name.to_string() );
+    printf("%02d: Exit: %s\n", ctx->counter, state_full_name);
 
   do: |
-    println!("{:02}: Running: {}", ctx.counter, state_full_name.to_string() );
+    printf("%02d: Running: %s\n", ctx->counter, state_full_name);
 
   transition: |
-    println!("{:02}: Transition from {} to {}", ctx.counter, t_src, t_dst );
-    
+    printf("%02d: Transition from %s to %s\n", ctx->counter, t_src, t_dst);
+
 
 entry: |
-  println!("{}","System Start");
+  printf("%s\n", "System Start");
 do: |
-  //println!("{}","Running root"
+  //printf("%s\n", "Running root");
 exit: |
-  println!("{}","Done");
+  printf("%s\n", "Done");
 
 initial: run
 
@@ -59,37 +59,37 @@ states:
   run:
     initial: a
     transitions:
-      - guard: ctx.counter == 08
+      - guard: ctx->counter == 8
         to: /run/d
-      - guard: ctx.counter == 19
+      - guard: ctx->counter == 19
         to: /run/a
-        
+
 
     states:
       a:
         transitions:
-          - guard: ctx.counter == 01
+          - guard: ctx->counter == 1
             action: |
-              println!("First transiton", );
+              printf("First transiton\n");
             to: b
-          - guard: ctx.counter == 03
+          - guard: ctx->counter == 3
             to: /run/c
-          - guard: ctx.counter == 05
+          - guard: ctx->counter == 5
             to: /run/c/d
-          - guard: ctx.counter == 11
+          - guard: ctx->counter == 11
             action: p("Testing history");
             to: /run/d
-          - guard: ctx.counter == 16
+          - guard: ctx->counter == 16
             to: /run/g
-          - guard: ctx.counter == 20
+          - guard: ctx->counter == 20
             to: /run/g/[a/b,b/a]
-          - guard: ctx.counter == 22
+          - guard: ctx->counter == 22
             to: /run/g/a/b
 
 
       b:
         transitions:
-          - guard: ctx.counter == 02 
+          - guard: ctx->counter == 2
             to: a
 
       c:
@@ -98,11 +98,11 @@ states:
 
           d:
             transitions:
-              - guard: ctx.counter == 04
+              - guard: ctx->counter == 4
                 to: /run
-              - guard: ctx.counter == 06
+              - guard: ctx->counter == 6
                 to: /run/c/d
-              - guard: ctx.counter == 07
+              - guard: ctx->counter == 7
                 to: /run/c/e
 
           e:
@@ -119,13 +119,13 @@ states:
         states:
           a:
             transitions:
-              - guard: ctx.counter == 09
+              - guard: ctx->counter == 9
                 to: b
           b:
             transitions:
-              - guard: ctx.counter == 10
+              - guard: ctx->counter == 10
                 to: /run/a
-              - guard: ctx.counter == 12
+              - guard: ctx->counter == 12
                 action: p("Testing parallel");
                 to: /run/g
 
@@ -137,15 +137,15 @@ states:
             states:
               a:
                 transitions:
-                  - guard: ctx.counter == 14 || ctx.counter == 18
+                  - guard: ctx->counter == 14 || ctx->counter == 18
                     to: b
-              b:  
+              b:
                 transitions:
-                  - guard: ctx.counter == 15 
+                  - guard: ctx->counter == 15
                     to: /run/a
-                  - guard: ctx.counter == 21 
+                  - guard: ctx->counter == 21
                     to: /run/a
-                  - guard: ctx.counter == 23 
+                  - guard: ctx->counter == 23
                     to: /run/g/b/c
           b:
             initial: b
@@ -153,13 +153,13 @@ states:
               a: { }
               b:
                 transitions:
-                  - guard: ctx.counter == 13 || ctx.counter == 17
+                  - guard: ctx->counter == 13 || ctx->counter == 17
                     to: c
-              c: 
+              c:
                 transitions:
-                  - guard: ctx.counter == 14 || ctx.counter == 18
+                  - guard: ctx->counter == 14 || ctx->counter == 18
                     to: a
-                  - guard: ctx.counter == 24
+                  - guard: ctx->counter == 24
                     action: p("Trying a descision tree");
                     to: /run/h
 
@@ -167,18 +167,18 @@ states:
         initial: a
         decisions:
           d1:
-            - guard: ctx.counter == 200
+            - guard: ctx->counter == 200
               to: /error
-            - guard: ctx.counter == 25
+            - guard: ctx->counter == 25
               to: b
-            - guard: ctx.counter == 26
+            - guard: ctx->counter == 26
               to: a
-            - guard: ctx.counter > 26
+            - guard: ctx->counter > 26
               to: "@d2"
           d2:
-            - guard: ctx.counter == 27
+            - guard: ctx->counter == 27
               to: c
-            - guard: ctx.counter == 28
+            - guard: ctx->counter == 28
               to: b
         states:
           a:
@@ -187,7 +187,7 @@ states:
           b:
             transitions:
               - to: "@d1"
-              - guard: ctx.counter == 29
+              - guard: ctx->counter == 29
                 to: null
           c:
             transitions:
@@ -196,5 +196,5 @@ states:
   error:
     entry: //
 
-  
+
 
