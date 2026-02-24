@@ -12,6 +12,9 @@ The tool is designed to support multiple output languages. Currently **Rust is f
 # Run the compiler (Rust output, default)
 uv run python sm-compiler.py model.smb --lang rust
 
+# Run the compiler with custom output directory
+uv run python sm-compiler.py model.smb --lang rust -o /path/to/output
+
 # Run the compiler (C output - outdated)
 uv run python sm-compiler.py model.yaml --lang c
 
@@ -34,9 +37,10 @@ Python 3.14, managed with `uv`. Dependencies: `pyyaml`, `pytest` (dev).
 ```
 sm-compiler.py          # Entry point: CLI, YAML loading, validation, orchestration
 codegen/
+  base_lang.py          # Abstract BaseGenerator: shared init, recurse, emit_transition_logic, gen_inspector
   common.py             # Shared utilities: path resolution, DOT generation, LCA/exit/entry sequences
-  rust_lang.py          # Rust code generator (fully featured)
-  c_lang.py             # C code generator (outdated, uses old schema keywords)
+  rust_lang.py          # Rust code generator (extends BaseGenerator, templates + assemble_output)
+  c_lang.py             # C code generator (outdated, standalone, does not yet use BaseGenerator)
 ```
 
 ### Pipeline
@@ -47,7 +51,9 @@ codegen/
 4. **Generate DOT** visualization (`common.generate_dot()`)
 5. **Generate code** via the selected language backend (`RustGenerator` or `CGenerator`)
 
-### Code Generation Pattern (Rust)
+### Code Generation Pattern
+
+The `BaseGenerator` (`codegen/base_lang.py`) implements a template-method pattern. It provides the shared algorithmic skeleton — `__init__`, `generate`, `recurse`, `emit_transition_logic`, `gen_inspector` — while subclasses supply language-specific templates (as class attributes) and implement `assemble_output()` for final source assembly. `RustGenerator` inherits from `BaseGenerator`; `CGenerator` is standalone pending its update to the current schema.
 
 The generator recursively walks the state tree (`recurse()`), producing for each state:
 - **Leaf states**: `_start`, `_entry`, `_exit`, `_do` functions
@@ -105,20 +111,18 @@ The C generator (`c_lang.py`) is **outdated**:
 ## Improvement Ideas
 
 ### High Priority
-1. **Bring C backend up to date** with current schema (rename keywords, add missing features)
-2. **Add Python backend** - next planned target language
-3. **Abstract the generator base class** - `RustGenerator` and `CGenerator` share significant structure (recurse, emit_transition_logic, gen_inspector). Extract a `BaseGenerator` with template-method pattern to reduce duplication when adding new languages.
+1. **Bring C backend up to date** with current schema (rename keywords, add missing features). Once updated, refactor `CGenerator` to inherit from `BaseGenerator`.
+2. **Add Python backend** - next planned target language (extend `BaseGenerator`)
 
 ### Medium Priority
-4. **Input file format**: The tool accepts both `.yaml` and `.smb` files but treats them identically. Consider formally defining `.smb` as the canonical extension.
-5. **Output path control**: Currently always writes to `statemachine.rs`/`.dot` in CWD. Add `--output` / `-o` flag.
-6. **Error messages**: Validation errors could include line numbers from the YAML source for better debugging.
-7. **Self-transition (`.`) handling**: `resolve_target_path` returns `current_path` for `.`, which causes LCA to be at the state itself. Verify this produces correct exit+re-enter behavior in all cases.
+3. **Input file format**: The tool accepts both `.yaml` and `.smb` files but treats them identically. Consider formally defining `.smb` as the canonical extension.
+4. **Error messages**: Validation errors could include line numbers from the YAML source for better debugging.
+5. **Self-transition (`.`) handling**: `resolve_target_path` returns `current_path` for `.`, which causes LCA to be at the state itself. Verify this produces correct exit+re-enter behavior in all cases.
 
 ### Low Priority
-8. **`get_state_data` duplication**: Both `sm-compiler.py` and `common.py` have `get_state_data`/`resolve_state_data` doing the same thing.
-9. **Guard macro expansion**: `IN_STATE(X)` is expanded to `ctx.in_state_X()` via regex in Rust. This should be language-specific and handled in the generator, not hardcoded.
-10. **Makefile** is configured for C workflow; the Rust workflow uses `compileRun` script instead.
+6. **`get_state_data` duplication**: Both `sm-compiler.py` and `common.py` have `get_state_data`/`resolve_state_data` doing the same thing.
+7. **Guard macro expansion**: `IN_STATE(X)` is expanded to `ctx.in_state_X()` via regex in Rust. This should be language-specific and handled in the generator, not hardcoded.
+8. **Makefile** is configured for C workflow; the Rust workflow uses `compileRun` script instead.
 
 ## Test Suite
 

@@ -125,7 +125,12 @@ def main():
     parser = argparse.ArgumentParser(description="State Machine Builder")
     parser.add_argument("file", help="Input YAML file")
     parser.add_argument("--lang", choices=['c', 'rust'], default='rust', help="Output language")
+    parser.add_argument("-o", "--output", default=".", help="Output directory for generated files (default: current directory)")
     args = parser.parse_args()
+
+    output_dir = args.output
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
 
     if not os.path.exists(args.file):
         sys.exit(f"Error: File '{args.file}' not found.")
@@ -144,25 +149,29 @@ def main():
     try:
         print(f"Generating Graphviz DOT...")
         dot_content = generate_dot(data, decisions)
-        with open("statemachine.dot", "w") as f:
+        dot_path = os.path.join(output_dir, "statemachine.dot")
+        with open(dot_path, "w") as f:
             f.write(dot_content)
-        print(" -> statemachine.dot created.")
+        print(f" -> {dot_path} created.")
 
         if args.lang == 'c':
             from codegen.c_lang import CGenerator
             print("Generating C code...")
             gen = CGenerator(data)
             header, source = gen.generate()
-            with open("statemachine.h", "w") as f: f.write(header)
-            with open("statemachine.c", "w") as f: f.write(source)
-            print(" -> statemachine.c / .h created.")
-            
+            h_path = os.path.join(output_dir, "statemachine.h")
+            c_path = os.path.join(output_dir, "statemachine.c")
+            with open(h_path, "w") as f: f.write(header)
+            with open(c_path, "w") as f: f.write(source)
+            print(f" -> {c_path} / .h created.")
+
         elif args.lang == 'rust':
             print("Generating Rust code...")
             gen = RustGenerator(data)
             source, _ = gen.generate()
-            with open("statemachine.rs", "w") as f: f.write(source)
-            print(" -> statemachine.rs created.")
+            rs_path = os.path.join(output_dir, "statemachine.rs")
+            with open(rs_path, "w") as f: f.write(source)
+            print(f" -> {rs_path} created.")
             
     except Exception as e:
         print(f"\nCRITICAL ERROR during generation: {e}")
