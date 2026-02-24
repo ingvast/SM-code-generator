@@ -1,9 +1,14 @@
 [project]
 name = "smbuilder"
 version = "0.1.0"
-description = "Generate c-file with statemachine defined in *.yaml"
+description = "Generate code to run statemachine defined in .smb files"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "pyyaml>=6.0.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
 ]

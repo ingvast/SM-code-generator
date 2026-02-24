@@ -2,12 +2,12 @@
 
 set -e
 
-yaml=$1
+smb=$1
 
-exe=${yaml%.yaml}
+exe=${smb%.smb}
 
-uv run sm-compiler.py $yaml --lang rust
+uv run sm-compiler.py $smb --lang rust
 
-rustc main.rs -o $exe 
+rustc statemachine.rs -o $exe
 [ -f $exe ] && ./$exe
 

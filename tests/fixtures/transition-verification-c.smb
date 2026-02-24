@@ -1,0 +1,200 @@
+lang: c
+
+# udea is to go thru different kinds of transitions.
+# * In the plane
+# * Up.
+# * Down
+# * Into a leg with history
+# * Into a orhtogoanl state
+# From a state with internal states
+
+# main should count up a counter each time it runs a tick.
+# At each new value it should compare the state_full_name with predicted.
+#
+
+includes: |
+  fn p( s : &str) {
+    println!("{}", s);
+  }
+  fn finish(ctx: &mut Context) {
+    ctx.do_loop = false;
+  }
+  
+
+# Rust-specific fields
+context: |
+    pub counter: i32,
+    pub do_loop: bool,
+
+# How to initialize the above fields in StateMachine::new()
+context_init: |
+    counter: 00,
+    do_loop: true,
+
+hooks:
+  entry: |
+    println!( "{:02}: Entry: {}", ctx.counter, state_full_name.to_string() );
+    
+  exit: |
+    println!("{:02}: Exit: {}", ctx.counter, state_full_name.to_string() );
+
+  do: |
+    println!("{:02}: Running: {}", ctx.counter, state_full_name.to_string() );
+
+  transition: |
+    println!("{:02}: Transition from {} to {}", ctx.counter, t_src, t_dst );
+    
+
+entry: |
+  println!("{}","System Start");
+do: |
+  //println!("{}","Running root"
+exit: |
+  println!("{}","Done");
+
+initial: run
+
+states:
+
+  run:
+    initial: a
+    transitions:
+      - guard: ctx.counter == 08
+        to: /run/d
+      - guard: ctx.counter == 19
+        to: /run/a
+        
+
+    states:
+      a:
+        transitions:
+          - guard: ctx.counter == 01
+            action: |
+              println!("First transiton", );
+            to: b
+          - guard: ctx.counter == 03
+            to: /run/c
+          - guard: ctx.counter == 05
+            to: /run/c/d
+          - guard: ctx.counter == 11
+            action: p("Testing history");
+            to: /run/d
+          - guard: ctx.counter == 16
+            to: /run/g
+          - guard: ctx.counter == 20
+            to: /run/g/[a/b,b/a]
+          - guard: ctx.counter == 22
+            to: /run/g/a/b
+
+
+      b:
+        transitions:
+          - guard: ctx.counter == 02 
+            to: a
+
+      c:
+        initial: d
+        states:
+
+          d:
+            transitions:
+              - guard: ctx.counter == 04
+                to: /run
+              - guard: ctx.counter == 06
+                to: /run/c/d
+              - guard: ctx.counter == 07
+                to: /run/c/e
+
+          e:
+            initial: f
+            states:
+              f:
+                transitions:
+                  - guard: false
+                    to: /run/a
+      d:
+        history: true
+        initial: a
+
+        states:
+          a:
+            transitions:
+              - guard: ctx.counter == 09
+                to: b
+          b:
+            transitions:
+              - guard: ctx.counter == 10
+                to: /run/a
+              - guard: ctx.counter == 12
+                action: p("Testing parallel");
+                to: /run/g
+
+      g:
+        orthogonal: true
+        states:
+          a:
+            initial: a
+            states:
+              a:
+                transitions:
+                  - guard: ctx.counter == 14 || ctx.counter == 18
+                    to: b
+              b:  
+                transitions:
+                  - guard: ctx.counter == 15 
+                    to: /run/a
+                  - guard: ctx.counter == 21 
+                    to: /run/a
+                  - guard: ctx.counter == 23 
+                    to: /run/g/b/c
+          b:
+            initial: b
+            states:
+              a: { }
+              b:
+                transitions:
+                  - guard: ctx.counter == 13 || ctx.counter == 17
+                    to: c
+              c: 
+                transitions:
+                  - guard: ctx.counter == 14 || ctx.counter == 18
+                    to: a
+                  - guard: ctx.counter == 24
+                    action: p("Trying a descision tree");
+                    to: /run/h
+
+      h:
+        initial: a
+        decisions:
+          d1:
+            - guard: ctx.counter == 200
+              to: /error
+            - guard: ctx.counter == 25
+              to: b
+            - guard: ctx.counter == 26
+              to: a
+            - guard: ctx.counter > 26
+              to: "@d2"
+          d2:
+            - guard: ctx.counter == 27
+              to: c
+            - guard: ctx.counter == 28
+              to: b
+        states:
+          a:
+            transitions:
+              - to: "@d1"
+          b:
+            transitions:
+              - to: "@d1"
+              - guard: ctx.counter == 29
+                to: null
+          c:
+            transitions:
+              - to: "@d1"
+
+  error:
+    entry: //
+
+  
+
