@@ -1,8 +1,12 @@
 import sys
 import re
 
+def sanitize_identifier(name):
+    """Replace characters that are invalid in code identifiers with underscores."""
+    return re.sub(r'[^a-zA-Z0-9_]', '_', name)
+
 def flatten_name(path, separator="_"):
-    return separator.join(path)
+    return separator.join(sanitize_identifier(part) for part in path)
 
 def get_graph_id(path):
     raw_id = "__".join(path)

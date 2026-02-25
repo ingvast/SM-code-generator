@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**SM-code-generator** (aka sm-compiler) is a Python-based code generator that takes a YAML/SMB state machine definition (produced by the SM-GUI editor at `../SM-gui`) and generates executable Hierarchical State Machine (HSM) code plus a Graphviz DOT visualization.
+**SM-code-generator** (aka sm-compiler) is a Python-based code generator that takes a YAML/SMB state machine definition (produced by the SM-GUI editor at `../SM-gui`) and generates executable Hierarchical State Machine (HSM) code, with optional Graphviz DOT/PNG visualization.
 
 The tool is designed to support multiple output languages. Currently **Rust, C, and Python are fully implemented and up-to-date**.
 
@@ -20,13 +20,21 @@ uv run python sm_compiler.py model.smb --lang c
 uv run python sm_compiler.py model.smb --lang python
 
 # Custom output base path (extensions added automatically)
-# Produces /path/to/myfsm.rs, /path/to/myfsm.dot, etc.
 uv run python sm_compiler.py model.smb -o /path/to/myfsm
+
+# Generate Graphviz DOT file
+uv run python sm_compiler.py model.smb --dot
+
+# Generate PNG diagram (requires Graphviz 'dot' tool on PATH)
+uv run python sm_compiler.py model.smb --png
+
+# Both DOT and PNG
+uv run python sm_compiler.py model.smb --dot --png
 
 # Build distributable package
 uv build
 # Install from wheel (makes `sm-compiler` available in PATH)
-uv tool install dist/smbuilder-0.2.1-py3-none-any.whl
+uv tool install dist/smbuilder-0.2.2-py3-none-any.whl
 
 # Run the test suite
 uv run pytest
@@ -36,8 +44,8 @@ uv run pytest -x          # stop on first failure
 # Compile and run generated Rust code manually
 ./compileRun transition-verification-rust.smb
 
-# View state machine diagram
-dot -Tpng statemachine.dot -o statemachine.png && open statemachine.png
+# View state machine diagram (--png generates it directly)
+uv run python sm_compiler.py model.smb --png && open statemachine.png
 ```
 
 Python 3.14, managed with `uv`. Dependencies: `pyyaml`, `pytest` (dev).
@@ -59,7 +67,7 @@ codegen/
 1. **Parse** YAML/SMB input via `yaml.safe_load()`
 2. **Collect decisions** from all levels into a flat dict (`collect_decisions()`)
 3. **Validate** the model: check initial states, transition targets, fork targets, decision references
-4. **Generate DOT** visualization (`common.generate_dot()`)
+4. **Generate DOT/PNG** visualization if `--dot` or `--png` flags are given (`common.generate_dot()`)
 5. **Generate code** via the selected language backend (`RustGenerator`, `CGenerator`, or `PythonGenerator`)
 
 ### Code Generation Pattern

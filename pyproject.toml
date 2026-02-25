@@ -1,6 +1,6 @@
 [project]
 name = "smbuilder"
-version = "0.2.1"
+version = "0.2.2"
 description = "Generate code to run statemachine defined in .smb files"
 readme = "README.md"
 requires-python = ">=3.14"

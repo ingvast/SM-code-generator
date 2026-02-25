@@ -1,0 +1,24 @@
+--- Starting State Machine with Dashed Names ---
+00: Entry: /
+System Start
+00: Entry: /wait-input
+/wait-input
+00: Running: /
+00: Running: /wait-input
+01: /wait-input
+01: Running: /
+01: Running: /wait-input
+01: Transition from /wait-input to /do-work
+01: Exit: /wait-input
+01: Entry: /do-work
+02: /do-work
+02: Running: /
+02: Running: /do-work
+03: /do-work
+03: Running: /
+03: Running: /do-work
+03: Transition from /do-work to Termination
+03: Exit: /do-work
+03: Exit: /
+Done
+04: FINISHED

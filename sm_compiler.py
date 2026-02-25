@@ -2,6 +2,8 @@ import yaml
 import sys
 import argparse
 import os
+import shutil
+import subprocess
 
 # Import the new parser helper
 from codegen.common import generate_dot, resolve_target_path, flatten_name, parse_fork_target, resolve_state_data
@@ -174,6 +176,10 @@ def main():
                         help="Output language (default: read from 'lang' key in SMB file)")
     parser.add_argument("-o", "--output", default=None,
                         help="Output base path without extension (default: ./statemachine)")
+    parser.add_argument("--dot", action="store_true",
+                        help="Generate Graphviz DOT file")
+    parser.add_argument("--png", action="store_true",
+                        help="Generate PNG diagram (requires Graphviz 'dot' tool)")
     args = parser.parse_args()
 
     if args.version:
@@ -228,12 +234,31 @@ def main():
     decisions = data.get('decisions', {})
 
     try:
-        print(f"Generating Graphviz DOT...")
-        dot_content = generate_dot(data, decisions)
-        dot_path = output_base + ".dot"
-        with open(dot_path, "w") as f:
-            f.write(dot_content)
-        print(f" -> {dot_path} created.")
+        if args.png:
+            if not shutil.which("dot"):
+                sys.exit("Error: --png requires the Graphviz 'dot' tool, but it was not found on PATH.\n"
+                         "Install it with: brew install graphviz (macOS) / apt install graphviz (Linux)")
+
+        if args.dot or args.png:
+            print(f"Generating Graphviz DOT...")
+            dot_content = generate_dot(data, decisions)
+
+            if args.dot:
+                dot_path = output_base + ".dot"
+                with open(dot_path, "w") as f:
+                    f.write(dot_content)
+                print(f" -> {dot_path} created.")
+
+            if args.png:
+                png_path = output_base + ".png"
+                result = subprocess.run(
+                    ["dot", "-Tpng", "-o", png_path],
+                    input=dot_content, text=True,
+                    capture_output=True,
+                )
+                if result.returncode != 0:
+                    sys.exit(f"Error: Graphviz 'dot' failed:\n{result.stderr}")
+                print(f" -> {png_path} created.")
 
         for lang in languages:
             generate_lang(lang, data, output_base)

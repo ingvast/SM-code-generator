@@ -1,0 +1,48 @@
+language: python
+
+includes: |
+  def finish(ctx):
+      ctx.do_loop = False
+
+context: |
+    counter: int
+    do_loop: bool
+
+context_init: |
+    ctx.counter = 0
+    ctx.do_loop = True
+
+hooks:
+  entry: |
+    print(f"{ctx.counter:02d}: Entry: {state_full_name}")
+
+  exit: |
+    print(f"{ctx.counter:02d}: Exit: {state_full_name}")
+
+  do: |
+    print(f"{ctx.counter:02d}: Running: {state_full_name}")
+
+  transition: |
+    print(f"{ctx.counter:02d}: Transition from {t_src} to {t_dst}")
+
+
+entry: |
+  print("System Start")
+do: |
+  pass
+exit: |
+  print("Done")
+
+initial: wait-input
+
+states:
+
+  wait-input:
+    transitions:
+      - guard: ctx.counter == 1
+        to: do-work
+
+  do-work:
+    transitions:
+      - guard: ctx.counter == 3
+        to: null

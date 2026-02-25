@@ -179,3 +179,9 @@ def test_self_transition_python(lang, tmp_path):
     """Test self transition by to: ."""
     actual = run_pipeline("self-transition-python.smb", lang, tmp_path)
     check_output(actual, "self-transition-python.smb", lang)
+
+@pytest.mark.parametrize("lang", get_languages("dashed-names.smb"))
+def test_dashed_names(lang, tmp_path):
+    """Test that state names with dashes work correctly."""
+    actual = run_pipeline("dashed-names.smb", lang, tmp_path)
+    check_output(actual, "dashed-names.smb", lang)
