@@ -1,0 +1,38 @@
+--- Starting Python State Machine ---
+00: Entry: /
+System Start
+00: Entry: /run
+00: Entry: /run/a
+/run/a
+00: Running: /
+00: Running: /run
+00: Running: /run/a
+01: /run/a
+01: Running: /
+01: Running: /run
+01: Running: /run/a
+01: Transition from /run/a to /run/a
+02: /run/a
+02: Running: /
+02: Running: /run
+02: Running: /run/a
+02: Transition from /run/a to /run/a
+03: /run/a
+03: Running: /
+03: Running: /run
+03: Running: /run/a
+03: Transition from /run/a to /run/a
+04: /run/a
+04: Running: /
+04: Running: /run
+04: Running: /run/a
+05: /run/a
+05: Running: /
+05: Running: /run
+05: Running: /run/a
+05: Transition from /run/a to Termination
+05: Exit: /run/a
+05: Exit: /run
+05: Exit: /
+Done
+06: FINISHED

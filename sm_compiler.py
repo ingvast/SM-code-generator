@@ -3,9 +3,6 @@ import sys
 import argparse
 import os
 
-# Ensure we can import from local directory
-sys.path.append(os.getcwd())
-
 # Import the new parser helper
 from codegen.common import generate_dot, resolve_target_path, flatten_name, parse_fork_target, resolve_state_data
 from codegen.rust_lang import RustGenerator
@@ -74,6 +71,9 @@ def validate_model(data):
 
             if raw_target is None or raw_target == "null":
                 continue
+
+            if raw_target == ".":
+                continue  # Self-transition is always valid
 
             if isinstance(raw_target, str) and raw_target.startswith('@'):
                 decision_name = raw_target[1:]
@@ -168,12 +168,25 @@ def generate_lang(lang, data, output_base):
 
 def main():
     parser = argparse.ArgumentParser(description="State Machine Builder")
-    parser.add_argument("file", help="Input YAML/SMB file")
+    parser.add_argument("file", nargs="?", help="Input YAML/SMB file")
+    parser.add_argument("-v", "--version", action="store_true", help="Print version and exit")
     parser.add_argument("--lang", choices=SUPPORTED_LANGS, default=None,
                         help="Output language (default: read from 'lang' key in SMB file)")
     parser.add_argument("-o", "--output", default=None,
                         help="Output base path without extension (default: ./statemachine)")
     args = parser.parse_args()
+
+    if args.version:
+        from importlib.metadata import version, PackageNotFoundError
+        try:
+            print(version("smbuilder"))
+        except PackageNotFoundError:
+            print("0.2.0 (development)")
+        return
+
+    if not args.file:
+        parser.print_usage()
+        sys.exit("Error: a file argument is required.")
 
     if not os.path.exists(args.file):
         sys.exit(f"Error: File '{args.file}' not found.")

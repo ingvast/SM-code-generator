@@ -6,7 +6,7 @@ smb=$1
 
 exe=${smb%.smb}
 
-uv run sm-compiler.py $smb --lang rust
+uv run python sm_compiler.py $smb --lang rust
 
 rustc statemachine.rs -o $exe
 [ -f $exe ] && ./$exe

@@ -1,0 +1,67 @@
+language: python
+
+# udea is to go thru different kinds of transitions.
+# * In the plane
+# * Up.
+# * Down
+# * Into a leg with history
+# * Into a orhtogoanl state
+# From a state with internal states
+
+# main should count up a counter each time it runs a tick.
+# At each new value it should compare the state_full_name with predicted.
+#
+
+includes: |
+  def p(s):
+      print(s)
+  def finish(ctx):
+      ctx.do_loop = False
+
+
+# Python-specific fields
+context: |
+    counter: int
+    do_loop: bool
+
+# How to initialize the above fields
+context_init: |
+    ctx.counter = 0
+    ctx.do_loop = True
+
+hooks:
+  entry: |
+    print(f"{ctx.counter:02d}: Entry: {state_full_name}")
+
+  exit: |
+    print(f"{ctx.counter:02d}: Exit: {state_full_name}")
+
+  do: |
+    print(f"{ctx.counter:02d}: Running: {state_full_name}")
+
+  transition: |
+    print(f"{ctx.counter:02d}: Transition from {t_src} to {t_dst}")
+
+
+entry: |
+  print("System Start")
+do: |
+  # print("Running root")
+exit: |
+  print("Done")
+
+initial: run
+
+states:
+
+  run:
+    initial: a
+
+    states:
+      a:
+        transitions:
+          - guard: ctx.counter in [ 1, 2, 3 ]
+            to: .
+          - guard: ctx.counter == 5
+            to: null
+

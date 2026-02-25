@@ -88,11 +88,11 @@ def run_pipeline(smb_file: str, lang: str, tmp_path: Path) -> list[str]:
 
     # Step 2: Generate state machine source into tmp_path
     result = subprocess.run(
-        [sys.executable, str(ROOT / "sm-compiler.py"), str(smb_path),
+        [sys.executable, str(ROOT / "sm_compiler.py"), str(smb_path),
          "--lang", lang, "-o", str(output_base)],
         capture_output=True, text=True,
     )
-    assert result.returncode == 0, f"sm-compiler.py failed:\n{result.stderr}"
+    assert result.returncode == 0, f"sm_compiler.py failed:\n{result.stderr}"
     generated = tmp_path / ("statemachine" + pipeline["gen_ext"])
     assert generated.exists(), f"Compiler did not produce {generated.name}"
 
@@ -142,6 +142,18 @@ def check_output(actual_lines: list[str], smb_file: str, lang: str) -> None:
 # Test cases
 # ---------------------------------------------------------------------------
 
+def test_version():
+    """--version / -v prints the version from pyproject.toml and exits cleanly."""
+    import tomllib
+    expected = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
+
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "sm_compiler.py"), "-v"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == expected
+
 @pytest.mark.parametrize("lang", get_languages("transition-verification-rust.smb"))
 def test_transition_verification(lang, tmp_path):
     """Full pipeline test covering all transition types in the HSM."""
@@ -161,3 +173,9 @@ def test_transition_verification_python(lang, tmp_path):
     """Same machine as test_transition_verification but targeting the Python backend."""
     actual = run_pipeline("transition-verification-python.smb", lang, tmp_path)
     check_output(actual, "transition-verification-python.smb", lang)
+
+@pytest.mark.parametrize("lang", get_languages("self-transition-python.smb"))
+def test_self_transition_python(lang, tmp_path):
+    """Test self transition by to: ."""
+    actual = run_pipeline("self-transition-python.smb", lang, tmp_path)
+    check_output(actual, "self-transition-python.smb", lang)

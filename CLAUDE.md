@@ -10,16 +10,23 @@ The tool is designed to support multiple output languages. Currently **Rust, C, 
 
 ```bash
 # Generate code (language read from 'language:' key in .smb file)
-uv run python sm-compiler.py model.smb
+# After installing: sm-compiler model.smb
+# During development:
+uv run python sm_compiler.py model.smb
 
 # Override language
-uv run python sm-compiler.py model.smb --lang rust
-uv run python sm-compiler.py model.smb --lang c
-uv run python sm-compiler.py model.smb --lang python
+uv run python sm_compiler.py model.smb --lang rust
+uv run python sm_compiler.py model.smb --lang c
+uv run python sm_compiler.py model.smb --lang python
 
 # Custom output base path (extensions added automatically)
 # Produces /path/to/myfsm.rs, /path/to/myfsm.dot, etc.
-uv run python sm-compiler.py model.smb -o /path/to/myfsm
+uv run python sm_compiler.py model.smb -o /path/to/myfsm
+
+# Build distributable package
+uv build
+# Install from wheel (makes `sm-compiler` available in PATH)
+uv tool install dist/smbuilder-0.2.1-py3-none-any.whl
 
 # Run the test suite
 uv run pytest

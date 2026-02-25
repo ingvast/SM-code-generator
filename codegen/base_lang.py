@@ -229,6 +229,13 @@ class BaseGenerator(ABC):
             base_target, forks = parse_fork_target(raw_target)
             target_path = resolve_target_path(name_path, base_target)
 
+            # Self-transition: fire hook, set flag, but no exit/re-entry
+            if raw_target == ".":
+                code += f"{indent}    return{self.STMT_END}\n"
+                if self.BLOCK_CLOSE:
+                    code += f"{indent}{self.BLOCK_CLOSE}\n"
+                return code
+
             # LCA calculation
             lca_index = get_lca_index(name_path, target_path)
 

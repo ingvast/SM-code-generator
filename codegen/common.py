@@ -28,11 +28,13 @@ def resolve_target_path(current_path, target_str):
         clean_target = target_str.replace("../", "")
         return parent_scope + clean_target.split("/")
     
-    # 4. Current/Child Relative (./)
+    # 4. Self-transition (.)
+    if target_str == ".":
+        return current_path
+
+    # 5. Current/Child Relative (./)
     if target_str.startswith("./"):
-        if target_str == "./" or target_str == ".":
-            return current_path
-        clean_target = target_str[2:] 
+        clean_target = target_str[2:]
         return current_path + clean_target.split("/")
     
     # 5. Sibling (Default)
