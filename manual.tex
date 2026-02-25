@@ -23,7 +23,7 @@
 
 % Listings setup for YAML
 \lstdefinelanguage{YAML}{
-  keywords={states, initial, transitions, guard, action, to, do, entry, exit, orthogonal, hooks, decisions, context, context_init, includes, history, lang},
+  keywords={states, initial, transitions, guard, action, to, do, entry, exit, orthogonal, hooks, decisions, context, context_init, includes, history, language},
   keywordstyle=\color{yamlkey}\bfseries,
   ndkeywords={true, false, null},
   ndkeywordstyle=\color{yamlval}\bfseries,
@@ -118,7 +118,7 @@ The generator also produces a \textbf{Graphviz DOT} file for visualizing the sta
 The generator is a Python script (\texttt{sm-compiler.py}) that validates your model and produces code in the selected target language.
 
 \begin{lstlisting}[language=Bash, caption=Command Line Usage]
-# Language is read from the 'lang:' key in the .smb file
+# Language is read from the 'language:' key in the .smb file
 uv run python sm-compiler.py model.smb
 
 # Override the language
@@ -137,7 +137,7 @@ uv run python sm-compiler.py model.smb -o build/myfsm
 \midrule
 \endhead
 \texttt{file} & (required) & Path to the input \texttt{.smb} file. \\
-\texttt{-{}-lang} & from file & Output language: \texttt{rust}, \texttt{c}, or \texttt{python}. If omitted, reads the \texttt{lang:} key from the SMB file (defaults to \texttt{rust} if absent). The \texttt{lang:} key may be a list, in which case code is generated for all listed languages. \\
+\texttt{-{}-lang} & from file & Output language: \texttt{rust}, \texttt{c}, or \texttt{python}. If omitted, reads the \texttt{language:} key from the SMB file (defaults to \texttt{rust} if absent). The \texttt{language:} key may be a list, in which case code is generated for all listed languages. \\
 \texttt{-o}, \texttt{-{}-output} & \texttt{./statemachine} & Output base path without extension. Language-specific extensions (\texttt{.rs}, \texttt{.c}, \texttt{.h}, \texttt{.py}, \texttt{.dot}) are appended automatically. Parent directories are created if needed. \\
 \bottomrule
 \end{longtable}
@@ -161,7 +161,7 @@ All & \texttt{name.dot} & Graphviz visualization of the state machine. \\
 The input file uses YAML syntax with the extension \texttt{.smb}. A complete model has this top-level structure:
 
 \begin{lstlisting}[language=YAML, caption={Top-level SMB structure}]
-lang: rust              # Target language (rust, c, or python)
+language: rust              # Target language (rust, c, or python)
 
 includes: |             # Code placed before the Context struct
   // imports, helper functions, etc.
@@ -632,7 +632,7 @@ my_state:
 Below is a minimal but complete SMB file demonstrating the key features, with Rust as the target language.
 
 \begin{lstlisting}[language=YAML, caption={Complete SMB example (Rust)}]
-lang: rust
+language: rust
 
 includes: |
   fn log(msg: &str) { println!("{}", msg); }

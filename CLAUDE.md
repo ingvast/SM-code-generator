@@ -9,7 +9,7 @@ The tool is designed to support multiple output languages. Currently **Rust, C, 
 ## Commands
 
 ```bash
-# Generate code (language read from 'lang:' key in .smb file)
+# Generate code (language read from 'language:' key in .smb file)
 uv run python sm-compiler.py model.smb
 
 # Override language
@@ -148,15 +148,15 @@ Integration tests live in `tests/` and are run with `uv run pytest`.
 tests/
   test_integration.py       # test runner and pipeline helpers
   fixtures/
-    <name>.smb              # state machine definition (contains `lang:` field)
+    <name>.smb              # state machine definition (contains `language:` field)
     <name>.rs / .c / .py   # hand-written driver program for that language
     <name>.expect           # expected stdout output
 ```
 
 ### How it works
 
-Each `.smb` fixture declares which languages to test via a `lang:` key (string or list). The test runner:
-1. Reads `lang:` from the `.smb` file and parametrizes one test per language
+Each `.smb` fixture declares which languages to test via a `language:` key (string or list). The test runner:
+1. Reads `language:` from the `.smb` file and parametrizes one test per language
 2. Copies the driver to a temporary directory
 3. Runs `sm-compiler.py` to generate the state machine source into the same temp dir
 4. Compiles (if needed) and runs the program

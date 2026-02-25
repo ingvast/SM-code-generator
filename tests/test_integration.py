@@ -2,7 +2,7 @@
 Integration tests for the sm-compiler pipeline.
 
 Each test fixture consists of:
-  - <name>.smb          the state machine definition (with a `lang:` field)
+  - <name>.smb          the state machine definition (with a `language:` field)
   - <name>.<lang>       the driver program (hand-written, calls into the generated SM)
   - <name>.<lang>.expect expected stdout output
 
@@ -59,9 +59,9 @@ LANG_PIPELINE = {
 
 
 def get_languages(smb_file: str) -> list[str]:
-    """Read the `lang` field from a .smb fixture file."""
+    """Read the `language` field from a .smb fixture file."""
     data = yaml.safe_load((FIXTURES / smb_file).read_text())
-    lang = data.get("lang", "rust")
+    lang = data.get("language", "rust")
     return [lang] if isinstance(lang, str) else list(lang)
 
 

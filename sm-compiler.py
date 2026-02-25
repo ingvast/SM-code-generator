@@ -199,7 +199,7 @@ def main():
     if args.lang:
         languages = [args.lang]
     else:
-        file_lang = data.get('lang', 'rust')
+        file_lang = data.get('language', 'rust')
         if isinstance(file_lang, str):
             languages = [file_lang]
         else:
