@@ -1,0 +1,14 @@
+language: python
+
+initial: waiting
+
+states:
+
+  waiting:
+    transitions:
+      - guard: time >= 0.1
+        to: done
+
+  done:
+    transitions:
+      - to: null

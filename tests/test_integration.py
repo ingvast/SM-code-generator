@@ -185,3 +185,9 @@ def test_dashed_names(lang, tmp_path):
     """Test that state names with dashes work correctly."""
     actual = run_pipeline("dashed-names.smb", lang, tmp_path)
     check_output(actual, "dashed-names.smb", lang)
+
+@pytest.mark.parametrize("lang", get_languages("timer-test.smb"))
+def test_timer(lang, tmp_path):
+    """Two-state machine: transitions from 'waiting' to 'done' after 0.1s (10 ticks of 0.01s) using the built-in time variable."""
+    actual = run_pipeline("timer-test.smb", lang, tmp_path)
+    check_output(actual, "timer-test.smb", lang)
