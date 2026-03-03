@@ -123,7 +123,7 @@ def validate_model(data):
         sys.exit(1)
     print("Model OK.")
 
-SUPPORTED_LANGS = ['c', 'rust', 'python']
+SUPPORTED_LANGS = ['c', 'rust', 'python', 'typescript']
 
 
 def generate_lang(lang, data, output_base):
@@ -163,6 +163,15 @@ def generate_lang(lang, data, output_base):
         py_path = output_base + ".py"
         with open(py_path, "w") as f: f.write(source)
         print(f" -> {py_path} created.")
+
+    elif lang == 'typescript':
+        from codegen.typescript_lang import TypeScriptGenerator
+        print("Generating TypeScript code...")
+        gen = TypeScriptGenerator(data)
+        source, _ = gen.generate()
+        ts_path = output_base + ".ts"
+        with open(ts_path, "w") as f: f.write(source)
+        print(f" -> {ts_path} created.")
 
     else:
         print(f"WARNING: Unknown language '{lang}', skipping.")

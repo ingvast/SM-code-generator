@@ -4,7 +4,7 @@
 
 **SM-code-generator** (aka sm-compiler) is a Python-based code generator that takes a YAML/SMB state machine definition (produced by the SM-GUI editor at `../SM-gui`) and generates executable Hierarchical State Machine (HSM) code, with optional Graphviz DOT/PNG visualization.
 
-The tool is designed to support multiple output languages. Currently **Rust, C, and Python are fully implemented and up-to-date**.
+The tool is designed to support multiple output languages. Currently **Rust, C, Python, and TypeScript are fully implemented and up-to-date**.
 
 ## Commands
 
@@ -18,6 +18,7 @@ uv run python sm_compiler.py model.smb
 uv run python sm_compiler.py model.smb --lang rust
 uv run python sm_compiler.py model.smb --lang c
 uv run python sm_compiler.py model.smb --lang python
+uv run python sm_compiler.py model.smb --lang typescript
 
 # Custom output base path (extensions added automatically)
 uv run python sm_compiler.py model.smb -o /path/to/myfsm
@@ -60,6 +61,7 @@ codegen/
   rust_lang.py          # Rust code generator (extends BaseGenerator, templates + assemble_output)
   c_lang.py             # C code generator (extends BaseGenerator, templates + assemble_output)
   python_lang.py        # Python code generator (extends BaseGenerator, templates + assemble_output)
+  typescript_lang.py    # TypeScript code generator (extends BaseGenerator, templates + assemble_output)
 ```
 
 ### Pipeline
@@ -68,7 +70,7 @@ codegen/
 2. **Collect decisions** from all levels into a flat dict (`collect_decisions()`)
 3. **Validate** the model: check initial states, transition targets, fork targets, decision references
 4. **Generate DOT/PNG** visualization if `--dot` or `--png` flags are given (`common.generate_dot()`)
-5. **Generate code** via the selected language backend (`RustGenerator`, `CGenerator`, or `PythonGenerator`)
+5. **Generate code** via the selected language backend (`RustGenerator`, `CGenerator`, `PythonGenerator`, or `TypeScriptGenerator`)
 
 ### Code Generation Pattern
 
@@ -142,6 +144,20 @@ The Python generator produces a single `.py` file containing a `Context` class, 
 - Guards use Python syntax: `ctx.counter == 5`, `ctx.flag or ctx.other`
 - `PythonGenerator` overrides `format_template()` for indent-aware template substitution
 
+## TypeScript Backend Notes
+
+The TypeScript generator produces a single `.ts` file containing a `Context` class, top-level state functions, and a `StateMachine` class. Key details:
+- Uses `ctx.field` dot notation, `null` instead of `None`, `===` for equality
+- `IN_STATE` checks are methods on `Context` (e.g., `ctx.inState_X()`)
+- Type alias: `type StateFn = (ctx: Context) => void;`
+- Function pointer fields typed as `StateFn | null`
+- Non-null assertion operator (`!`) used for calling nullable function pointers: `ctx.ptr!(ctx)`
+- `context_init` uses `ctx.field = value;` syntax (the `ctx = this` alias is set in the constructor)
+- Boolean literals are `true`/`false`, logical operators are `||`/`&&`/`!`
+- Guards use TypeScript syntax: `ctx.counter === 5`, `ctx.flag || ctx.other`
+- Run with `npx tsx statemachine.ts` or import as a module
+- Exports `StateMachine` and `Context` classes
+
 ## Improvement Ideas
 
 ### Medium Priority
@@ -188,6 +204,7 @@ Adding a new language: add an entry to `LANG_PIPELINE` in `test_integration.py` 
 | `transition-verification-rust` | Rust | Passing — covers all transition types |
 | `transition-verification-c` | C | Passing — covers all transition types |
 | `transition-verification-python` | Python | Passing — covers all transition types |
+| `transition-verification-typescript` | TypeScript | Passing — covers all transition types |
 
 ## Related Projects
 

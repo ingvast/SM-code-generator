@@ -55,6 +55,12 @@ LANG_PIPELINE = {
         "compile": None,
         "run": lambda driver, exe: [sys.executable, str(driver)],
     },
+    "typescript": {
+        "gen_ext": ".ts",
+        "driver_ext": ".ts",
+        "compile": None,
+        "run": lambda driver, exe: ["npx", "tsx", str(driver)],
+    },
 }
 
 
@@ -179,6 +185,12 @@ def test_self_transition_python(lang, tmp_path):
     """Test self transition by to: ."""
     actual = run_pipeline("self-transition-python.smb", lang, tmp_path)
     check_output(actual, "self-transition-python.smb", lang)
+
+@pytest.mark.parametrize("lang", get_languages("transition-verification-typescript.smb"))
+def test_transition_verification_typescript(lang, tmp_path):
+    """Same machine as test_transition_verification but targeting the TypeScript backend."""
+    actual = run_pipeline("transition-verification-typescript.smb", lang, tmp_path)
+    check_output(actual, "transition-verification-typescript.smb", lang)
 
 @pytest.mark.parametrize("lang", get_languages("dashed-names.smb"))
 def test_dashed_names(lang, tmp_path):
