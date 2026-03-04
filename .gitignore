@@ -5,3 +5,11 @@
 statemachine.dot
 statemachine.png
 statemachine.rs
+.claude
+__pycache__
+uv.lock
+*.egg-info/
+dist/
+.DS_Store
+*.swp
+*.swo
