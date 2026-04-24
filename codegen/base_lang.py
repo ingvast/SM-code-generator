@@ -34,6 +34,7 @@ class BaseGenerator(ABC):
         self.outputs = {'context_ptrs': [], 'context_init': [], 'functions': [], 'impls': []}
         self.inspect_list = []
         self.decisions = data.get('decisions', {})
+        self.decision_scopes = data.get('_decision_scopes', {})
         self.hooks = data.get('hooks', {})
         if 'transition' not in self.hooks and 'transition' in data:
              self.hooks['transition'] = data['transition']
@@ -165,7 +166,17 @@ class BaseGenerator(ABC):
         """
         pass
 
-    def emit_transition_logic(self, name_path, t, indent_level=1):
+    def emit_transition_logic(self, name_path, t, indent_level=1, resolve_scope=None):
+        """Emit code for one transition rule.
+
+        name_path     — the actual source state (drives exit sequence, LCA).
+        resolve_scope — path used to resolve the rule's relative `to:` target.
+                        Defaults to name_path; for rules inside a decision,
+                        the caller passes the decision's own scope so that
+                        paths resolve from where the decision is defined.
+        """
+        if resolve_scope is None:
+            resolve_scope = name_path
         indent = "    " * indent_level
         code = ""
         raw_target = t.get('to')
@@ -193,7 +204,7 @@ class BaseGenerator(ABC):
             dst_str = f"Decision({decision_name})"
         else:
             base_target, forks = parse_fork_target(raw_target)
-            target_path = resolve_target_path(name_path, base_target)
+            target_path = resolve_target_path(resolve_scope, base_target)
             if forks:
                 dst_str = "/" + "/".join(target_path[1:]) + str(forks)
             else:
@@ -223,11 +234,12 @@ class BaseGenerator(ABC):
 
         elif is_decision:
             decision_rules = self.decisions[decision_name]
+            inner_scope = self.decision_scopes.get(decision_name, resolve_scope)
             for rule in decision_rules:
-                code += self.emit_transition_logic(name_path, rule, indent_level + 1)
+                code += self.emit_transition_logic(name_path, rule, indent_level + 1, resolve_scope=inner_scope)
         else:
             base_target, forks = parse_fork_target(raw_target)
-            target_path = resolve_target_path(name_path, base_target)
+            target_path = resolve_target_path(resolve_scope, base_target)
 
             # Self-transition on a leaf state: fire hook and set flag, no exit/re-entry.
             # For composite states, fall through to the standard exit/entry logic below.

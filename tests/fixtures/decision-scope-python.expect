@@ -1,0 +1,10 @@
+00: /outer/inner/deep
+01: /outer/inner/deep -> /target
+01: /target
+02: /target -> /outer/kick
+02: /outer/kick
+03: /outer/kick -> /outer/sib
+03: /outer/sib
+04: /outer/sib -> Termination
+04: FINISHED
+done

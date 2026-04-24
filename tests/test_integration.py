@@ -204,8 +204,17 @@ def test_timer(lang, tmp_path):
     actual = run_pipeline("timer-test.smb", lang, tmp_path)
     check_output(actual, "timer-test.smb", lang)
 
+
 @pytest.mark.parametrize("lang", get_languages("self-transition-composite.smb"))
 def test_self_transition_composite(lang, tmp_path):
     """Self-transition (to: .) on a composite state exits/re-enters child and parent."""
     actual = run_pipeline("self-transition-composite.smb", lang, tmp_path)
     check_output(actual, "self-transition-composite.smb", lang)
+
+@pytest.mark.parametrize("lang", get_languages("decision-scope-python.smb"))
+def test_decision_scope(lang, tmp_path):
+    """Decision-rule `to:` paths must resolve from the decision's own scope,
+    not from the caller state's path. Covers bare-sibling and `./` forms."""
+    actual = run_pipeline("decision-scope-python.smb", lang, tmp_path)
+    check_output(actual, "decision-scope-python.smb", lang)
+

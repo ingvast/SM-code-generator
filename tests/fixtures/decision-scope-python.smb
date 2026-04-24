@@ -1,0 +1,60 @@
+language: python
+
+# Verifies that decision-rule `to:` paths resolve from the decision's own
+# scope (where the decision is defined), not from the caller state's path.
+#
+# Two cases that the previous code got wrong:
+#   1. Nested-container decision referenced from deep state, targets a root
+#      sibling by bare name. Chain: deep -> @D_mid -> @D_root -> target.
+#      `target` must resolve to /target (root sibling), not /outer/inner/target.
+#   2. Container decision uses `./X` to name a state in the same container.
+#      D_mid2 is defined in `outer`; `./sib` must mean /outer/sib.
+
+includes: |
+  def p(s):
+      print(s)
+
+context: |
+    counter: int
+
+context_init: |
+    ctx.counter = 0
+
+hooks:
+  transition: |
+    print(f"{ctx.counter:02d}: {t_src} -> {t_dst}")
+
+initial: outer
+states:
+  outer:
+    initial: inner
+    states:
+      inner:
+        initial: deep
+        states:
+          deep:
+            transitions:
+              - guard: ctx.counter == 1
+                to: "@D_mid"
+      sib:
+        transitions:
+          - guard: ctx.counter == 4
+            to: null
+      kick:
+        transitions:
+          - guard: ctx.counter == 3
+            to: "@D_mid2"
+    decisions:
+      D_mid:
+        - to: "@D_root"
+      D_mid2:
+        - to: ./sib
+
+  target:
+    transitions:
+      - guard: ctx.counter == 2
+        to: /outer/kick
+
+decisions:
+  D_root:
+    - to: target

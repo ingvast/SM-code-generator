@@ -14,10 +14,27 @@ class BuildError(Exception):
 
 def collect_decisions(data):
     """Walk the state tree and collect all decisions: into a single flat dict.
-    Merges with root-level decisions. Errors on duplicate names."""
-    merged = dict(data.get('decisions', {}) or {})
+    Merges with root-level decisions. Errors on duplicate names.
 
-    def walk(states):
+    Also records each decision's scope — the path used to resolve its rules'
+    relative `to:` targets. A decision sits at the "child level" of its
+    container, so its scope path is `container_path + [decision_name]`
+    (a pseudo-sibling of the container's real states). Since decisions are
+    leaves, a leading `./` on a rule target is normalized to a bare name
+    (also "sibling", i.e. another state in the container)."""
+    merged = dict(data.get('decisions', {}) or {})
+    scopes = {name: ['root', name] for name in merged}
+
+    def normalize_rules(rules):
+        for rule in rules or []:
+            tgt = rule.get('to')
+            if isinstance(tgt, str) and tgt.startswith('./'):
+                rule['to'] = tgt[2:]
+
+    for dname, rules in merged.items():
+        normalize_rules(rules)
+
+    def walk(scope, states):
         if not states:
             return
         for name, state_data in states.items():
@@ -30,11 +47,14 @@ def collect_decisions(data):
                         print(f"\nERROR: Duplicate decision name '{dname}' found in state '{name}'.")
                         sys.exit(1)
                     merged[dname] = dval
+                    scopes[dname] = scope + [name, dname]
+                    normalize_rules(dval)
                 del state_data['decisions']
-            walk(state_data.get('states'))
+            walk(scope + [name], state_data.get('states'))
 
-    walk(data.get('states'))
+    walk(['root'], data.get('states'))
     data['decisions'] = merged
+    data['_decision_scopes'] = scopes
 
 def get_state_data(root_data, path_parts):
     current = {'states': root_data.get('states', {}), 'initial': root_data.get('initial')}

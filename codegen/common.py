@@ -212,10 +212,13 @@ def generate_dot(root_data, decisions):
     node_lines = []
     edge_lines = []
     generate_dot_recursive(['root'], root_data, node_lines, edge_lines, composite_ids, decisions)
-    
+
+    decision_scopes = root_data.get('_decision_scopes', {})
+
     for name, transitions in decisions.items():
         dec_id = get_graph_id(['root', name])
         node_lines.append(f"    {dec_id} [label=\"?\", shape=diamond, style=filled, fillcolor=lightyellow];")
+        scope = decision_scopes.get(name, ['root', name])
         for t in transitions:
             target_str = t.get('to')
             if target_str is None: continue
@@ -227,7 +230,7 @@ def generate_dot(root_data, decisions):
                 lhead = ""
             else:
                 base_str, _ = parse_fork_target(target_str)
-                target_path = resolve_target_path(['root', name], base_str)
+                target_path = resolve_target_path(scope, base_str)
                 target_id = get_graph_id(target_path)
                 tgt_node = f"{target_id}_start" if target_id in composite_ids else target_id
                 lhead = f"lhead=cluster_{target_id}" if target_id in composite_ids else ""
