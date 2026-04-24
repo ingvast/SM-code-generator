@@ -14,36 +14,41 @@ def get_graph_id(path):
     return safe_id
 
 def resolve_target_path(current_path, target_str):
-    if not target_str: return current_path 
+    # Path semantics (relative to `current_path`, which includes the state itself):
+    #   "x"            -> sibling              (equivalent to "../x")
+    #   "../x"         -> sibling              (one level up from state == sibling scope)
+    #   "../../x"      -> up one more level    (parent's sibling)
+    #   "../../../x"   -> up two more levels
+    #   "./x"          -> child of self
+    #   "."            -> self
+    #   "/a/b" or "root/a/b" -> absolute
+    if not target_str:
+        return current_path
 
-    # 1. Absolute Path
     if target_str.startswith("/"):
         parts = target_str.strip("/").split("/")
-        if parts[0] != "root": return ["root"] + parts
+        if parts[0] != "root":
+            return ["root"] + parts
         return parts
-    
-    # 2. Legacy Absolute
-    if target_str.startswith("root/"): 
+
+    if target_str.startswith("root/"):
         return target_str.split("/")
-    
-    # 3. Parent Relative (../)
-    if target_str.startswith("../"):
-        parent_scope = current_path[:-2]
-        clean_target = target_str.replace("../", "")
-        return parent_scope + clean_target.split("/")
-    
-    # 4. Self-transition (.)
+
     if target_str == ".":
         return current_path
 
-    # 5. Current/Child Relative (./)
     if target_str.startswith("./"):
-        clean_target = target_str[2:]
-        return current_path + clean_target.split("/")
-    
-    # 5. Sibling (Default)
-    parent_scope = current_path[:-1]
-    return parent_scope + target_str.split("/")
+        return current_path + target_str[2:].split("/")
+
+    parts = target_str.split("/")
+    up = 0
+    while up < len(parts) and parts[up] == "..":
+        up += 1
+    rest = parts[up:]
+    # Bare sibling (no "..") counts as one level up so it reaches the parent scope.
+    levels = max(up, 1)
+    base = current_path[:-levels] if levels <= len(current_path) else []
+    return base + rest
 
 def resolve_state_data(root_data, path_parts):
     current = {'states': root_data.get('states', {}), 'initial': root_data.get('initial')}

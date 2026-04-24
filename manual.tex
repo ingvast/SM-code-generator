@@ -514,7 +514,7 @@ The \texttt{to:} keyword supports several addressing modes:
 \texttt{/absolute/path} & From the root. Use for long jumps across the hierarchy. \\
 \texttt{sibling} & A state in the same parent (lateral transition). \\
 \texttt{./child} & A direct child of the current state (drill down). \\
-\texttt{../uncle} & Up one level, then a sibling of the parent. \\
+\texttt{../sibling} & Move up one level to the parent and find a sibling (a child of the parent). Equivalent to bare \texttt{sibling}. Each additional \texttt{../} climbs one more level, so \texttt{../../uncle} is a sibling of the parent, \texttt{../../../x} a sibling of the grandparent, and so on. \\
 \texttt{.} & Self-transition: the state exits and immediately re-enters. \\
 \texttt{null} & Machine termination. Exits all states up to root and stops. \\
 \texttt{@decision\_name} & Delegate to a named decision tree (see Section~\ref{sec:decisions}). \\
