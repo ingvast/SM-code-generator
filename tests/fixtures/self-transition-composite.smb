@@ -1,0 +1,45 @@
+language: python
+
+# Test: self-transition (to: .) on a COMPOSITE state.
+# When 'outer' does to: ., it should:
+#   1. Exit the active child (inner)
+#   2. Exit outer
+#   3. Re-enter outer
+#   4. Re-enter the initial child (inner)
+#
+# The 'self_fired' flag prevents the self-transition from firing a second time
+# so the machine can progress to termination.
+
+context: |
+    counter: int
+    self_fired: bool
+
+context_init: |
+    ctx.counter = 0
+    ctx.self_fired = False
+
+hooks:
+  entry: |
+    print(f"Entry: {state_full_name}")
+  exit: |
+    print(f"Exit: {state_full_name}")
+  transition: |
+    print(f"Transition: {t_src} -> {t_dst}")
+
+initial: outer
+
+states:
+
+  outer:
+    initial: inner
+    transitions:
+      - guard: ctx.counter == 2 and not ctx.self_fired
+        action: ctx.self_fired = True
+        to: .
+      - guard: ctx.counter >= 4
+        to: null
+
+    states:
+      inner:
+        do: |
+          ctx.counter += 1

@@ -1,0 +1,13 @@
+Entry: /
+Entry: /outer
+Entry: /outer/inner
+Transition: /outer -> /outer
+Exit: /outer/inner
+Exit: /outer
+Entry: /outer
+Entry: /outer/inner
+Transition: /outer -> Termination
+Exit: /outer/inner
+Exit: /outer
+Exit: /
+done
