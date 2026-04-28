@@ -19,20 +19,10 @@ def collect_decisions(data):
     Also records each decision's scope — the path used to resolve its rules'
     relative `to:` targets. A decision sits at the "child level" of its
     container, so its scope path is `container_path + [decision_name]`
-    (a pseudo-sibling of the container's real states). Since decisions are
-    leaves, a leading `./` on a rule target is normalized to a bare name
-    (also "sibling", i.e. another state in the container)."""
+    (a pseudo-sibling of the container's real states). Decisions are leaves,
+    so `./x` is invalid for a decision rule and will not resolve."""
     merged = dict(data.get('decisions', {}) or {})
     scopes = {name: ['root', name] for name in merged}
-
-    def normalize_rules(rules):
-        for rule in rules or []:
-            tgt = rule.get('to')
-            if isinstance(tgt, str) and tgt.startswith('./'):
-                rule['to'] = tgt[2:]
-
-    for dname, rules in merged.items():
-        normalize_rules(rules)
 
     def walk(scope, states):
         if not states:
@@ -48,7 +38,6 @@ def collect_decisions(data):
                         sys.exit(1)
                     merged[dname] = dval
                     scopes[dname] = scope + [name, dname]
-                    normalize_rules(dval)
                 del state_data['decisions']
             walk(scope + [name], state_data.get('states'))
 
