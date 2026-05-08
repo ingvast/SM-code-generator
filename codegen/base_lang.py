@@ -217,8 +217,7 @@ class BaseGenerator(ABC):
              if hook_code:
                  formatted_hook = "\n".join([f"{indent}    {line}" for line in hook_code.splitlines()])
                  code += formatted_hook + "\n"
-
-        code += f"{indent}    {self.fmt_set_flag('transition_fired', self.TRUE_LIT)}\n"
+             code += f"{indent}    {self.fmt_set_flag('transition_fired', self.TRUE_LIT)}\n"
 
         action_code = t.get('action')
         if action_code:

@@ -294,8 +294,9 @@ class Context:
         source += f"""
 
 class StateMachine:
-    def __init__(self):
+    def __init__(self, now=0.0):
         self.ctx = Context()
+        self.ctx.now = now
         self.root = None
         state_root_entry(self.ctx)
         self.root = state_root_do
