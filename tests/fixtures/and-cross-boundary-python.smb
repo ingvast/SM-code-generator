@@ -1,0 +1,65 @@
+SM-builder-version: "0.6.0"
+language: python
+
+# Tests cross-orthogonal-boundary AND: sources come from different orthogonal
+# composites, and the AND node is defined at root level (outside both).
+#
+# Root is orthogonal with two children: OrthoA and OrthoB.
+# OrthoA is itself orthogonal with two sub-regions: Worker and Background.
+#   Worker/ActiveA -> feeds /@J1 (guard: step>=2)
+#   Background/Idle -> does NOT feed AND (bystander)
+# OrthoB is a simple OR composite.
+#   OrthoB/ActiveB -> feeds /@J1 (guard: step>=3)
+#
+# ActiveA (depth=5) and ActiveB (depth=4) are from different orthogonal
+# composites. J1 is at root level, referenced with /@J1.
+#
+# At step=2: ActiveA fires guard but ActiveB not ready (step>=3 false) -> no fire
+# At step=3: ActiveA fires guard, AND gate in_state(ActiveB) and step>=3 -> true -> fires
+
+context: |
+    step: int
+
+context_init: |
+    ctx.step = 0
+
+hooks:
+  transition: |
+    print(f"{ctx.step:02d}: {t_src} -> {t_dst}")
+
+ands:
+  J1:
+    - to: /Done
+
+initial: Root
+
+states:
+  Root:
+    orthogonal: true
+    states:
+      OrthoA:
+        orthogonal: true
+        states:
+          Worker:
+            initial: ActiveA
+            states:
+              ActiveA:
+                transitions:
+                  - guard: ctx.step >= 2
+                    to: "/@J1"
+          Background:
+            initial: Idle
+            states:
+              Idle: {}
+
+      OrthoB:
+        initial: ActiveB
+        states:
+          ActiveB:
+            transitions:
+              - guard: ctx.step >= 3
+                to: "/@J1"
+
+  Done:
+    transitions:
+      - to: null

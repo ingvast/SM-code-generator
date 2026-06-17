@@ -233,3 +233,19 @@ def test_and_join(lang, tmp_path):
     actual = run_pipeline("and-join-python.smb", lang, tmp_path)
     check_output(actual, "and-join-python.smb", lang)
 
+@pytest.mark.parametrize("lang", get_languages("and-3way-python.smb"))
+def test_and_3way(lang, tmp_path):
+    """3-way AND join: three orthogonal regions all feed the same AND node.
+    Staggered guards (step>=2, >=3, >=4) verify the AND does NOT fire until
+    all three guards are simultaneously satisfied (at step=4)."""
+    actual = run_pipeline("and-3way-python.smb", lang, tmp_path)
+    check_output(actual, "and-3way-python.smb", lang)
+
+@pytest.mark.parametrize("lang", get_languages("and-cross-boundary-python.smb"))
+def test_and_cross_boundary(lang, tmp_path):
+    """Cross-orthogonal-boundary AND: AND node at root level, sources from
+    different nested orthogonal composites (ActiveA inside OrthoA/Worker,
+    ActiveB directly in OrthoB). Demonstrates generality beyond sibling regions."""
+    actual = run_pipeline("and-cross-boundary-python.smb", lang, tmp_path)
+    check_output(actual, "and-cross-boundary-python.smb", lang)
+

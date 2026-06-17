@@ -1,0 +1,54 @@
+SM-builder-version: "0.6.0"
+language: python
+
+# Tests 3-way AND join.
+# Parallel has three orthogonal regions (RegA, RegB, RegC) all feeding J3.
+# Guards stagger readiness: A ready at step>=2, B at step>=3, C at step>=4.
+# The AND must NOT fire at step=2 or step=3 (not all three satisfied simultaneously).
+# At step=4 all guards pass; RegA fires first (region order), the AND gate
+# checks the other two (B's in_state + guard, C's in_state + guard) — all true.
+
+context: |
+    step: int
+
+context_init: |
+    ctx.step = 0
+
+hooks:
+  transition: |
+    print(f"{ctx.step:02d}: {t_src} -> {t_dst}")
+
+initial: Parallel
+
+states:
+  Parallel:
+    orthogonal: true
+    ands:
+      J3:
+        - to: /Done
+    states:
+      RegA:
+        initial: A
+        states:
+          A:
+            transitions:
+              - guard: ctx.step >= 2
+                to: "../../@J3"
+      RegB:
+        initial: B
+        states:
+          B:
+            transitions:
+              - guard: ctx.step >= 3
+                to: "../../@J3"
+      RegC:
+        initial: C
+        states:
+          C:
+            transitions:
+              - guard: ctx.step >= 4
+                to: "../../@J3"
+
+  Done:
+    transitions:
+      - to: null
