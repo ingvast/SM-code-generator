@@ -27,6 +27,7 @@ class BaseGenerator(ABC):
     TRUE_LIT = "true"     # Boolean true literal (Python: "True")
     FALSE_LIT = "false"   # Boolean false literal (Python: "False")
     COMMENT = "//"        # Line comment prefix (Python: "#")
+    BOOL_AND = " && "     # Boolean AND operator (Python: " and ")
 
     def __init__(self, data):
         self.data = data
@@ -35,6 +36,7 @@ class BaseGenerator(ABC):
         self.inspect_list = []
         self.is_hierarchical_refs = data.get('_is_hierarchical_refs', False)
         self.pseudostate_index = data.get('_pseudostate_index', {})
+        self.and_inputs = data.get('_and_inputs', {})
         self.decisions = data.get('decisions', {})
         self.decision_scopes = data.get('_decision_scopes', {})
         self.hooks = data.get('hooks', {})
@@ -238,14 +240,42 @@ class BaseGenerator(ABC):
 
         elif is_decision:
             if self.is_hierarchical_refs:
-                _kind, decision_rules, inner_scope = resolve_pseudo_ref(
+                kind, decision_rules, inner_scope = resolve_pseudo_ref(
                     raw_target, resolve_scope, self.pseudostate_index
                 )
             else:
+                kind = 'decision'
                 decision_rules = self.decisions[decision_name]
                 inner_scope = self.decision_scopes.get(decision_name, resolve_scope)
-            for rule in decision_rules:
-                code += self.emit_transition_logic(name_path, rule, indent_level + 1, resolve_scope=inner_scope)
+
+            if kind == 'and':
+                # AND gate: all other incoming sources must be in their ready state
+                and_key = (tuple(inner_scope[:-1]), inner_scope[-1])
+                other_sources = [
+                    s for s in self.and_inputs.get(and_key, [])
+                    if s['source_path'] != name_path
+                ]
+                if other_sources:
+                    conditions = []
+                    for s in other_sources:
+                        s_c_name = flatten_name(s['source_path'], "_")
+                        conditions.append(f"IN_STATE({s_c_name})")
+                        guard = s.get('guard')
+                        if guard and guard is not True:
+                            conditions.append(str(guard))
+                    compound = self.BOOL_AND.join(conditions)
+                    compound = self.fmt_guard_expand(compound)
+                    code += f"{indent}    {self.fmt_if_open(compound)}\n"
+                    for rule in decision_rules:
+                        code += self.emit_transition_logic(name_path, rule, indent_level + 2, resolve_scope=inner_scope)
+                    if self.BLOCK_CLOSE:
+                        code += f"{indent}    {self.BLOCK_CLOSE}\n"
+                else:
+                    for rule in decision_rules:
+                        code += self.emit_transition_logic(name_path, rule, indent_level + 1, resolve_scope=inner_scope)
+            else:
+                for rule in decision_rules:
+                    code += self.emit_transition_logic(name_path, rule, indent_level + 1, resolve_scope=inner_scope)
         else:
             base_target, forks = parse_fork_target(raw_target)
             target_path = resolve_target_path(resolve_scope, base_target)

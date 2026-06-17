@@ -225,3 +225,11 @@ def test_hierarchical_decisions(lang, tmp_path):
     actual = run_pipeline("hierarchical-decisions-python.smb", lang, tmp_path)
     check_output(actual, "hierarchical-decisions-python.smb", lang)
 
+@pytest.mark.parametrize("lang", get_languages("and-join-python.smb"))
+def test_and_join(lang, tmp_path):
+    """AND join node (ands: block, SM-builder-version >= 0.6.0).
+    Orthogonal state with two regions feeding @A1; AND gate fires only when
+    both regions are simultaneously in their ready state (step>=3)."""
+    actual = run_pipeline("and-join-python.smb", lang, tmp_path)
+    check_output(actual, "and-join-python.smb", lang)
+

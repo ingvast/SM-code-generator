@@ -295,7 +295,10 @@ def generate_dot(root_data, decisions):
         for (container_tuple, name), entry in pseudostate_index.items():
             scope = entry['scope']
             dec_id = get_graph_id(scope)
-            node_lines.append(f"    {dec_id} [label=\"?\", shape=diamond, style=filled, fillcolor=lightyellow];")
+            if entry['kind'] == 'and':
+                node_lines.append(f"    {dec_id} [label=\"\\u2227\", shape=invtrapezium, style=filled, fillcolor=lightblue];")
+            else:
+                node_lines.append(f"    {dec_id} [label=\"?\", shape=diamond, style=filled, fillcolor=lightyellow];")
             for t in entry['rules']:
                 target_str = t.get('to')
                 if target_str is None:

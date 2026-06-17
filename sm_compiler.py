@@ -57,6 +57,38 @@ def collect_pseudostates_hierarchical(data):
     data['_pseudostate_index'] = index
     data['_is_hierarchical_refs'] = True
 
+def collect_and_inputs(data):
+    """Reverse-edge pass: for each AND pseudo-state, record all incoming transitions.
+
+    Must be called after collect_pseudostates_hierarchical. Builds:
+      _and_inputs: {(container_tuple, name): [{'source_path': [...], 'guard': ...}]}
+    """
+    index = data.get('_pseudostate_index', {})
+    and_inputs = {}
+
+    def walk(name_path, state_data):
+        for t in state_data.get('transitions', []):
+            raw_target = t.get('to')
+            if not isinstance(raw_target, str) or '@' not in raw_target:
+                continue
+            try:
+                kind, _rules, scope = resolve_pseudo_ref(raw_target, name_path, index)
+            except (KeyError, ValueError):
+                continue
+            if kind != 'and':
+                continue
+            key = (tuple(scope[:-1]), scope[-1])
+            and_inputs.setdefault(key, []).append({
+                'source_path': name_path,
+                'guard': t.get('guard'),
+            })
+        for child_name, child_data in (state_data.get('states') or {}).items():
+            if isinstance(child_data, dict):
+                walk(name_path + [child_name], child_data)
+
+    walk(['root'], data)
+    data['_and_inputs'] = and_inputs
+
 def collect_decisions(data):
     """Walk the state tree and collect all decisions: into a single flat dict.
     Merges with root-level decisions. Errors on duplicate names.
@@ -303,6 +335,7 @@ def main():
     smb_version = data.get('SM-builder-version', '')
     if version_gte(smb_version, PSEUDOSTATE_REF_MIN_VERSION):
         collect_pseudostates_hierarchical(data)
+        collect_and_inputs(data)
     else:
         collect_decisions(data)
     validate_model(data)

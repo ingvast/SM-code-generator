@@ -11,6 +11,7 @@ class PythonGenerator(BaseGenerator):
     TRUE_LIT = "True"
     FALSE_LIT = "False"
     COMMENT = "#"
+    BOOL_AND = " and "
     LINE_SEP = "\n"
 
     FUNC_PREAMBLE = """\

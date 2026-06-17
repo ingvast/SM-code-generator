@@ -1,0 +1,50 @@
+SM-builder-version: "0.6.0"
+language: python
+
+# Verifies AND join node (ands: block, SM-builder-version >= 0.6.0).
+#
+# Parallel is an orthogonal state with two regions feeding into AND node A1.
+# The AND fires only when BOTH regions are simultaneously ready:
+#   - Working fires when step >= 2 (ready early)
+#   - Processing fires when step >= 3 (ready later)
+# At step=2 the AND gate holds because Processing's guard (step>=3) is not met.
+# At step=3 both guards are satisfied; RegA/Working fires first (region order),
+# the AND gate passes, and the whole orthogonal state exits to Done.
+
+context: |
+    step: int
+
+context_init: |
+    ctx.step = 0
+
+hooks:
+  transition: |
+    print(f"{ctx.step:02d}: {t_src} -> {t_dst}")
+
+initial: Parallel
+
+states:
+  Parallel:
+    orthogonal: true
+    ands:
+      A1:               # fires when BOTH Working AND Processing are ready
+        - to: /Done
+    states:
+      RegA:
+        initial: Working
+        states:
+          Working:
+            transitions:
+              - guard: ctx.step >= 2
+                to: "../../@A1"   # up 2 levels from Working to Parallel container
+      RegB:
+        initial: Processing
+        states:
+          Processing:
+            transitions:
+              - guard: ctx.step >= 3
+                to: "../../@A1"
+
+  Done:
+    transitions:
+      - to: null
