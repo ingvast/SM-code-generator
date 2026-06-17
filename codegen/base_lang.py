@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from .common import flatten_name, resolve_target_path, get_exit_sequence, get_entry_sequence, parse_fork_target, resolve_state_data, get_lca_index
+from .common import flatten_name, resolve_target_path, get_exit_sequence, get_entry_sequence, parse_fork_target, resolve_state_data, get_lca_index, parse_pseudo_ref, resolve_pseudo_ref
 import re
 import sys
 
@@ -33,6 +33,8 @@ class BaseGenerator(ABC):
         self.state_counter = 0
         self.outputs = {'context_ptrs': [], 'context_init': [], 'functions': [], 'impls': []}
         self.inspect_list = []
+        self.is_hierarchical_refs = data.get('_is_hierarchical_refs', False)
+        self.pseudostate_index = data.get('_pseudostate_index', {})
         self.decisions = data.get('decisions', {})
         self.decision_scopes = data.get('_decision_scopes', {})
         self.hooks = data.get('hooks', {})
@@ -194,14 +196,17 @@ class BaseGenerator(ABC):
         dst_str = "???"
         is_termination = False
 
-        is_decision = isinstance(raw_target, str) and raw_target.startswith('@')
-        decision_name = raw_target[1:] if is_decision else None
+        if self.is_hierarchical_refs:
+            is_decision = isinstance(raw_target, str) and '@' in raw_target
+        else:
+            is_decision = isinstance(raw_target, str) and raw_target.startswith('@')
+        decision_name = raw_target[1:] if (is_decision and not self.is_hierarchical_refs) else None
 
         if raw_target is None or raw_target == "null" or raw_target == "":
             dst_str = "Termination"
             is_termination = True
         elif is_decision:
-            dst_str = f"Decision({decision_name})"
+            dst_str = f"Decision({raw_target})"
         else:
             base_target, forks = parse_fork_target(raw_target)
             target_path = resolve_target_path(resolve_scope, base_target)
@@ -232,8 +237,13 @@ class BaseGenerator(ABC):
             code += f"{indent}    return{self.STMT_END}\n"
 
         elif is_decision:
-            decision_rules = self.decisions[decision_name]
-            inner_scope = self.decision_scopes.get(decision_name, resolve_scope)
+            if self.is_hierarchical_refs:
+                _kind, decision_rules, inner_scope = resolve_pseudo_ref(
+                    raw_target, resolve_scope, self.pseudostate_index
+                )
+            else:
+                decision_rules = self.decisions[decision_name]
+                inner_scope = self.decision_scopes.get(decision_name, resolve_scope)
             for rule in decision_rules:
                 code += self.emit_transition_logic(name_path, rule, indent_level + 1, resolve_scope=inner_scope)
         else:

@@ -6,11 +6,56 @@ import shutil
 import subprocess
 
 # Import the new parser helper
-from codegen.common import generate_dot, resolve_target_path, flatten_name, parse_fork_target, resolve_state_data
+from codegen.common import generate_dot, resolve_target_path, flatten_name, parse_fork_target, resolve_state_data, parse_pseudo_ref, resolve_pseudo_ref
 from codegen.rust_lang import RustGenerator
+
+PSEUDOSTATE_REF_MIN_VERSION = "0.6.0"
+
+
+def version_gte(ver_str, min_ver_str):
+    """Return True if ver_str >= min_ver_str (semver tuple comparison)."""
+    def parse(v):
+        try:
+            return tuple(int(x) for x in str(v).split('.'))
+        except (ValueError, AttributeError):
+            return (0, 0, 0)
+    return parse(ver_str) >= parse(min_ver_str)
+
 
 class BuildError(Exception):
     pass
+
+def collect_pseudostates_hierarchical(data):
+    """Build _pseudostate_index for SM-builder-version >= 0.6.0.
+
+    Walks the tree, registering every decisions: and ands: entry keyed by
+    (container_path_tuple, name). Validates per-container uniqueness across
+    both kinds (since both are referenced through the shared @ sigil).
+    Does NOT flatten into data['decisions'] — generators use the index directly.
+    """
+    index = {}
+
+    def register(container_path, kind, name, rules):
+        key = (tuple(container_path), name)
+        if key in index:
+            path_str = '/' + '/'.join(container_path[1:]) if len(container_path) > 1 else '/'
+            print(f"\nERROR: Duplicate pseudo-state name '{name}' in container '{path_str}'.")
+            sys.exit(1)
+        scope = list(container_path) + [name]
+        index[key] = {'kind': kind, 'rules': rules, 'scope': scope}
+
+    def walk(container_path, state_data):
+        for name, rules in (state_data.get('decisions') or {}).items():
+            register(container_path, 'decision', name, rules)
+        for name, rules in (state_data.get('ands') or {}).items():
+            register(container_path, 'and', name, rules)
+        for child_name, child_data in (state_data.get('states') or {}).items():
+            if isinstance(child_data, dict):
+                walk(container_path + [child_name], child_data)
+
+    walk(['root'], data)
+    data['_pseudostate_index'] = index
+    data['_is_hierarchical_refs'] = True
 
 def collect_decisions(data):
     """Walk the state tree and collect all decisions: into a single flat dict.
@@ -59,10 +104,12 @@ def get_state_data(root_data, path_parts):
 def validate_model(data):
     print("Validating model...")
     errors = []
-    
+    is_hierarchical = data.get('_is_hierarchical_refs', False)
+    pseudostate_index = data.get('_pseudostate_index', {})
+
     def check_state(name_path, state_data):
         display_name = "/" + "/".join(name_path[1:])
-        
+
         if 'states' in state_data:
             # CHANGED: Check 'orthogonal' instead of 'parallel'
             if 'initial' not in state_data and not state_data.get('orthogonal', False):
@@ -77,7 +124,7 @@ def validate_model(data):
             if 'to' not in t:
                 errors.append(f"State '{display_name}', transition #{i+1}: Missing 'to'.")
                 continue
-            
+
             raw_target = t['to']
 
             if raw_target is None or raw_target == "null":
@@ -86,7 +133,14 @@ def validate_model(data):
             if raw_target == ".":
                 continue  # Self-transition is always valid
 
-            if isinstance(raw_target, str) and raw_target.startswith('@'):
+            if is_hierarchical and isinstance(raw_target, str) and '@' in raw_target:
+                try:
+                    resolve_pseudo_ref(raw_target, name_path, pseudostate_index)
+                except (KeyError, ValueError) as e:
+                    errors.append(f"State '{display_name}', transition #{i+1}: {e}")
+                continue
+
+            if not is_hierarchical and isinstance(raw_target, str) and raw_target.startswith('@'):
                 decision_name = raw_target[1:]
                 if decision_name not in data.get('decisions', {}):
                     errors.append(f"State '{display_name}', transition #{i+1}: Decision '@{decision_name}' does not exist.")
@@ -246,7 +300,11 @@ def main():
         if lang not in SUPPORTED_LANGS:
             sys.exit(f"Error: Unsupported language '{lang}'. Supported: {', '.join(SUPPORTED_LANGS)}")
 
-    collect_decisions(data)
+    smb_version = data.get('SM-builder-version', '')
+    if version_gte(smb_version, PSEUDOSTATE_REF_MIN_VERSION):
+        collect_pseudostates_hierarchical(data)
+    else:
+        collect_decisions(data)
     validate_model(data)
 
     decisions = data.get('decisions', {})

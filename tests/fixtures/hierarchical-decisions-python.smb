@@ -1,0 +1,51 @@
+SM-builder-version: "0.6.0"
+language: python
+
+# Verifies hierarchical pseudo-state references (SM-builder-version >= 0.6.0).
+#
+# Reference forms tested:
+#   1. @D        -- decision in same container as source state
+#   2. ../Sib/@D -- decision inside a sibling state (relative cross-ref)
+#
+# Decision scope: rules in D_outer use bare name 'gamma', which must resolve
+# relative to D_outer's own container (outer), not from the caller (alpha).
+
+context: |
+    step: int
+
+context_init: |
+    ctx.step = 0
+
+hooks:
+  transition: |
+    print(f"{ctx.step:02d}: {t_src} -> {t_dst}")
+
+initial: outer
+
+states:
+  outer:
+    initial: alpha
+    decisions:
+      D_outer:                 # container: ['root', 'outer']
+        - to: gamma            # bare name -> sibling of D_outer in outer -> /outer/gamma
+    states:
+      alpha:
+        transitions:
+          - guard: ctx.step == 1
+            to: "@D_outer"     # same-container ref: D_outer is in outer (alpha's parent) ✓
+      beta:
+        decisions:
+          D_beta:              # container: ['root', 'outer', 'beta']
+            - to: /done        # absolute path to root-level done
+        transitions:
+          - guard: ctx.step == 10
+            to: null           # unreachable; beta only reached via D_beta
+      gamma:
+        transitions:
+          - guard: ctx.step == 2
+            to: "../beta/@D_beta"  # relative cross-ref: D_beta is inside sibling beta ✓
+
+  done:
+    transitions:
+      - guard: ctx.step == 3
+        to: null

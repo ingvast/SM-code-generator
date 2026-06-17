@@ -48,7 +48,7 @@ states:
       D_mid:
         - to: "@D_root"
       D_mid2:
-        - to: ./sib
+        - to: sib
 
   target:
     transitions:

@@ -63,6 +63,72 @@ def resolve_state_data(root_data, path_parts):
         current = current['states'][part]
     return current
 
+def parse_pseudo_ref(ref):
+    """Parse a hierarchical pseudo-state reference string.
+
+    Returns (path_prefix, pseudo_name) or None if ref is not a pseudo-state ref.
+    path_prefix is the container path segment (may be '' for same-container refs,
+    '/' for root-level, or a relative/absolute path).
+
+    Examples:
+      '@D1'           -> ('', 'D1')
+      '../Other/@D2'  -> ('../Other', 'D2')
+      '/Top/Sub/@D3'  -> ('/Top/Sub', 'D3')
+      '/@D4'          -> ('/', 'D4')
+    """
+    if not isinstance(ref, str) or '@' not in ref:
+        return None
+    at_idx = ref.rfind('@')
+    raw_prefix = ref[:at_idx]
+    pseudo_name = ref[at_idx + 1:]
+    if not pseudo_name:
+        return None
+    # Strip exactly one trailing '/' (the separator before @), but keep lone '/'
+    if raw_prefix.endswith('/') and len(raw_prefix) > 1:
+        path_prefix = raw_prefix[:-1]
+    else:
+        path_prefix = raw_prefix
+    return (path_prefix, pseudo_name)
+
+
+def resolve_pseudo_ref(ref, resolve_scope, index):
+    """Resolve a hierarchical pseudo-state reference to its index entry.
+
+    ref:          the `to:` string, e.g. '@D1', '../Other/@D2', '/Top/@D3'
+    resolve_scope: current state (or decision) path list
+    index:        the _pseudostate_index dict built by collect_pseudostates_hierarchical
+
+    Returns (kind, rules, scope) tuple or raises KeyError/ValueError.
+    """
+    parsed = parse_pseudo_ref(ref)
+    if parsed is None:
+        raise ValueError(f"Not a pseudo-state reference: {ref!r}")
+
+    path_prefix, pseudo_name = parsed
+
+    if path_prefix == '':
+        # Bare @Name: container is the parent of the current scope
+        container_path = resolve_scope[:-1]
+    elif path_prefix == '/':
+        # Root-level container
+        container_path = ['root']
+    elif path_prefix.startswith('/'):
+        # Absolute path (e.g. /Top/Sub)
+        parts = path_prefix.strip('/').split('/')
+        container_path = (['root'] + parts) if parts[0] != 'root' else parts
+    else:
+        # Relative path (e.g. ../Sibling, ./Child)
+        container_path = resolve_target_path(resolve_scope, path_prefix)
+
+    key = (tuple(container_path), pseudo_name)
+    if key not in index:
+        path_str = '/' + '/'.join(container_path[1:]) if len(container_path) > 1 else '/'
+        raise KeyError(f"Pseudo-state '@{pseudo_name}' not found in '{path_str}'")
+
+    entry = index[key]
+    return entry['kind'], entry['rules'], entry['scope']
+
+
 def parse_fork_target(target_str):
     if target_str is None:
         return None, None
@@ -116,7 +182,7 @@ def find_composites(name_path, data, result_set):
         for child_name, child_data in data['states'].items():
             find_composites(name_path + [child_name], child_data, result_set)
 
-def generate_dot_recursive(name_path, data, node_lines, edge_lines, composite_ids, decisions):
+def generate_dot_recursive(name_path, data, node_lines, edge_lines, composite_ids, decisions, pseudostate_index=None):
     my_id = get_graph_id(name_path)
     is_composite = 'states' in data
     indent = "    " * len(name_path)
@@ -148,7 +214,7 @@ def generate_dot_recursive(name_path, data, node_lines, edge_lines, composite_id
              node_lines.append(f"{indent}    {my_id}_start -> {tgt} [{lhead}];")
 
         for child_name, child_data in data['states'].items():
-            generate_dot_recursive(name_path + [child_name], child_data, node_lines, edge_lines, composite_ids, decisions)
+            generate_dot_recursive(name_path + [child_name], child_data, node_lines, edge_lines, composite_ids, decisions, pseudostate_index)
         node_lines.append(f"{indent}}}")
     else:
         label = name_path[-1]
@@ -167,10 +233,12 @@ def generate_dot_recursive(name_path, data, node_lines, edge_lines, composite_id
             # Termination node visualization could go here
             continue
 
-        is_decision = isinstance(target_str, str) and target_str.startswith('@')
+        is_pseudo = isinstance(target_str, str) and '@' in target_str and pseudostate_index is not None
+        is_decision = (isinstance(target_str, str) and target_str.startswith('@')) if not is_pseudo else False
+
         decision_name = target_str[1:] if is_decision else None
 
-        if not is_decision:
+        if not is_decision and not is_pseudo:
             base_str, _ = parse_fork_target(target_str)
             target_path = resolve_target_path(name_path, base_str)
             target_id = get_graph_id(target_path)
@@ -178,7 +246,14 @@ def generate_dot_recursive(name_path, data, node_lines, edge_lines, composite_id
         src = f"{my_id}_start" if is_composite else my_id
         ltail = f"ltail=cluster_{my_id}" if is_composite else ""
 
-        if is_decision:
+        if is_pseudo:
+            try:
+                _kind, _rules, scope = resolve_pseudo_ref(target_str, name_path, pseudostate_index)
+                tgt = get_graph_id(scope)
+            except (KeyError, ValueError):
+                continue
+            lhead = ""
+        elif is_decision:
             tgt = get_graph_id(['root', decision_name])
             lhead = ""
         else:
@@ -211,37 +286,68 @@ def generate_dot(root_data, decisions):
     find_composites(['root'], root_data, composite_ids)
     node_lines = []
     edge_lines = []
-    generate_dot_recursive(['root'], root_data, node_lines, edge_lines, composite_ids, decisions)
 
-    decision_scopes = root_data.get('_decision_scopes', {})
+    pseudostate_index = root_data.get('_pseudostate_index') if root_data.get('_is_hierarchical_refs') else None
+    generate_dot_recursive(['root'], root_data, node_lines, edge_lines, composite_ids, decisions, pseudostate_index)
 
-    for name, transitions in decisions.items():
-        dec_id = get_graph_id(['root', name])
-        node_lines.append(f"    {dec_id} [label=\"?\", shape=diamond, style=filled, fillcolor=lightyellow];")
-        scope = decision_scopes.get(name, ['root', name])
-        for t in transitions:
-            target_str = t.get('to')
-            if target_str is None: continue
-
-            is_dec_ref = isinstance(target_str, str) and target_str.startswith('@')
-            if is_dec_ref:
-                dec_ref_name = target_str[1:]
-                tgt_node = get_graph_id(['root', dec_ref_name])
-                lhead = ""
-            else:
-                base_str, _ = parse_fork_target(target_str)
-                target_path = resolve_target_path(scope, base_str)
-                target_id = get_graph_id(target_path)
-                tgt_node = f"{target_id}_start" if target_id in composite_ids else target_id
-                lhead = f"lhead=cluster_{target_id}" if target_id in composite_ids else ""
-            
-            # Label logic for decisions
-            raw_guard = t.get('guard', '')
-            lbl = str(raw_guard).replace('"', '\\"')
-            
-            attr = f'label="{lbl}", fontsize=10'
-            if lhead: attr += f", {lhead}"
-            edge_lines.append(f"    {dec_id} -> {tgt_node} [{attr}];")
+    if pseudostate_index is not None:
+        # Hierarchical mode: draw nodes/edges from the index
+        for (container_tuple, name), entry in pseudostate_index.items():
+            scope = entry['scope']
+            dec_id = get_graph_id(scope)
+            node_lines.append(f"    {dec_id} [label=\"?\", shape=diamond, style=filled, fillcolor=lightyellow];")
+            for t in entry['rules']:
+                target_str = t.get('to')
+                if target_str is None:
+                    continue
+                is_pseudo_rule = isinstance(target_str, str) and '@' in target_str
+                if is_pseudo_rule:
+                    try:
+                        _k, _r, tgt_scope = resolve_pseudo_ref(target_str, scope, pseudostate_index)
+                        tgt_node = get_graph_id(tgt_scope)
+                    except (KeyError, ValueError):
+                        continue
+                    lhead = ""
+                else:
+                    base_str, _ = parse_fork_target(target_str)
+                    target_path = resolve_target_path(scope, base_str)
+                    target_id = get_graph_id(target_path)
+                    tgt_node = f"{target_id}_start" if target_id in composite_ids else target_id
+                    lhead = f"lhead=cluster_{target_id}" if target_id in composite_ids else ""
+                raw_guard = t.get('guard', '')
+                lbl = str(raw_guard).replace('"', '\\"')
+                attr = f'label="{lbl}", fontsize=10'
+                if lhead:
+                    attr += f", {lhead}"
+                edge_lines.append(f"    {dec_id} -> {tgt_node} [{attr}];")
+    else:
+        # Legacy flat mode
+        decision_scopes = root_data.get('_decision_scopes', {})
+        for name, transitions in decisions.items():
+            dec_id = get_graph_id(['root', name])
+            node_lines.append(f"    {dec_id} [label=\"?\", shape=diamond, style=filled, fillcolor=lightyellow];")
+            scope = decision_scopes.get(name, ['root', name])
+            for t in transitions:
+                target_str = t.get('to')
+                if target_str is None:
+                    continue
+                is_dec_ref = isinstance(target_str, str) and target_str.startswith('@')
+                if is_dec_ref:
+                    dec_ref_name = target_str[1:]
+                    tgt_node = get_graph_id(['root', dec_ref_name])
+                    lhead = ""
+                else:
+                    base_str, _ = parse_fork_target(target_str)
+                    target_path = resolve_target_path(scope, base_str)
+                    target_id = get_graph_id(target_path)
+                    tgt_node = f"{target_id}_start" if target_id in composite_ids else target_id
+                    lhead = f"lhead=cluster_{target_id}" if target_id in composite_ids else ""
+                raw_guard = t.get('guard', '')
+                lbl = str(raw_guard).replace('"', '\\"')
+                attr = f'label="{lbl}", fontsize=10'
+                if lhead:
+                    attr += f", {lhead}"
+                edge_lines.append(f"    {dec_id} -> {tgt_node} [{attr}];")
 
     lines = ["digraph StateMachine {", "    compound=true; fontname=\"Arial\"; node [fontname=\"Arial\"]; edge [fontname=\"Arial\"];"]
     lines.append("    // --- Structures ---")

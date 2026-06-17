@@ -1,0 +1,8 @@
+00: /outer/alpha
+01: /outer/alpha -> /outer/gamma
+01: /outer/gamma
+02: /outer/gamma -> /done
+02: /done
+03: /done -> Termination
+03: FINISHED
+done

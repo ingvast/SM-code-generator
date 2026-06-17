@@ -218,3 +218,10 @@ def test_decision_scope(lang, tmp_path):
     actual = run_pipeline("decision-scope-python.smb", lang, tmp_path)
     check_output(actual, "decision-scope-python.smb", lang)
 
+@pytest.mark.parametrize("lang", get_languages("hierarchical-decisions-python.smb"))
+def test_hierarchical_decisions(lang, tmp_path):
+    """Hierarchical pseudo-state references (SM-builder-version >= 0.6.0).
+    Tests @D (same-container) and ../Sibling/@D (relative cross-container) refs."""
+    actual = run_pipeline("hierarchical-decisions-python.smb", lang, tmp_path)
+    check_output(actual, "hierarchical-decisions-python.smb", lang)
+
