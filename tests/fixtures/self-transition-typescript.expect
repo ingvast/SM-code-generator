@@ -1,0 +1,24 @@
+--- Starting TypeScript State Machine ---
+00: Entry: /
+00: Entry: /run
+00: Entry: /run/a
+/run/a
+01: /run/a
+01: Transition: /run/a -> /run/a
+01: Exit: /run/a
+01: Entry: /run/a
+02: /run/a
+02: Transition: /run/a -> /run/a
+02: Exit: /run/a
+02: Entry: /run/a
+03: /run/a
+03: Transition: /run/a -> /run/b
+03: Exit: /run/a
+03: Entry: /run/b
+04: /run/b
+04: Transition: /run/b -> Termination
+04: Exit: /run/b
+04: Exit: /run
+04: Exit: /
+05: FINISHED
+FINISHED

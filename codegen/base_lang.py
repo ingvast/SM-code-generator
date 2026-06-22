@@ -214,9 +214,14 @@ class BaseGenerator(ABC):
         raw_target = t.get('to')
 
         test_val = t.get('guard', True)
-        if test_val is True: test_cond = self.TRUE_LIT
-        elif test_val is False: test_cond = self.FALSE_LIT
-        else: test_cond = str(test_val)
+        # An absent, null, or blank guard means "always" — emit the true literal
+        # rather than str(None)/"" which would be an invalid/falsy target expression.
+        if test_val is True or test_val is None or (isinstance(test_val, str) and not test_val.strip()):
+            test_cond = self.TRUE_LIT
+        elif test_val is False:
+            test_cond = self.FALSE_LIT
+        else:
+            test_cond = str(test_val)
 
         test_cond = self.fmt_guard_expand(test_cond)
 
@@ -327,15 +332,10 @@ class BaseGenerator(ABC):
             base_target, forks = parse_fork_target(raw_target)
             target_path = resolve_target_path(resolve_scope, base_target)
 
-            # Self-transition on a leaf state: fire hook and set flag, no exit/re-entry.
-            # For composite states, fall through to the standard exit/entry logic below.
-            if raw_target == ".":
-                my_data = resolve_state_data(self.data, name_path)
-                if not (my_data and 'states' in my_data):
-                    code += f"{indent}    return{self.STMT_END}\n"
-                    if self.BLOCK_CLOSE:
-                        code += f"{indent}{self.BLOCK_CLOSE}\n"
-                    return code
+            # A self-transition (".") resolves target_path == name_path. The LCA
+            # logic below then produces a self exit followed by a self re-entry,
+            # which is the desired exit/re-entry behavior for both leaf and
+            # composite states — no special-casing needed.
 
             # LCA calculation
             lca_index = get_lca_index(name_path, target_path)

@@ -12,16 +12,22 @@ System Start
 01: Running: /run
 01: Running: /run/a
 01: Transition from /run/a to /run/a
+01: Exit: /run/a
+01: Entry: /run/a
 02: /run/a
 02: Running: /
 02: Running: /run
 02: Running: /run/a
 02: Transition from /run/a to /run/a
+02: Exit: /run/a
+02: Entry: /run/a
 03: /run/a
 03: Running: /
 03: Running: /run
 03: Running: /run/a
 03: Transition from /run/a to /run/a
+03: Exit: /run/a
+03: Entry: /run/a
 04: /run/a
 04: Running: /
 04: Running: /run

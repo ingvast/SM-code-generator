@@ -186,6 +186,12 @@ def test_self_transition_python(lang, tmp_path):
     actual = run_pipeline("self-transition-python.smb", lang, tmp_path)
     check_output(actual, "self-transition-python.smb", lang)
 
+@pytest.mark.parametrize("lang", get_languages("self-transition-typescript.smb"))
+def test_self_transition_typescript(lang, tmp_path):
+    """Self transition exit/re-entry and empty-guard ('always') handling in TypeScript."""
+    actual = run_pipeline("self-transition-typescript.smb", lang, tmp_path)
+    check_output(actual, "self-transition-typescript.smb", lang)
+
 @pytest.mark.parametrize("lang", get_languages("transition-verification-typescript.smb"))
 def test_transition_verification_typescript(lang, tmp_path):
     """Same machine as test_transition_verification but targeting the TypeScript backend."""

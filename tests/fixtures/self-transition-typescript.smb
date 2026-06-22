@@ -1,0 +1,43 @@
+language: typescript
+
+# Regression test for two related self-transition bugs (see README BUGS):
+#   * A transition with an EMPTY guard must execute (it means "always").
+#   * A self transition (to: .) on a leaf state must exit then re-enter the state.
+#
+# State 'a' self-transitions on counter 1 and 2 (must show Exit/Entry each time).
+# State 'b' has a single transition with an empty guard to null; it must fire on
+# the first tick that 'b' runs, proving an empty guard is treated as "always".
+
+context: |
+    counter: number = 0;
+
+context_init: |
+    ctx.counter = 0;
+
+hooks:
+  entry: |
+    console.log(`${String(ctx.counter).padStart(2, '0')}: Entry: ${state_full_name}`);
+  exit: |
+    console.log(`${String(ctx.counter).padStart(2, '0')}: Exit: ${state_full_name}`);
+  transition: |
+    console.log(`${String(ctx.counter).padStart(2, '0')}: Transition: ${t_src} -> ${t_dst}`);
+
+initial: run
+
+states:
+
+  run:
+    initial: a
+
+    states:
+      a:
+        transitions:
+          - guard: ctx.counter === 1 || ctx.counter === 2
+            to: .
+          - guard: ctx.counter === 3
+            to: b
+      b:
+        transitions:
+          # Empty guard -> must be treated as "always" and fire immediately.
+          - guard:
+            to: null
