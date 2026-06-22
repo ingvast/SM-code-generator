@@ -124,6 +124,24 @@ State machine uses **function pointers** (Rust: `Option<StateFn>`, C: `StateFunc
 4. Execute exit sequence (leaf to LCA, bottom-up)
 5. Execute entry sequence (LCA to target, top-down)
 
+### The `time` Variable
+
+`time` in a guard means elapsed time since the **current** state was entered. It is a local
+declared in each state's function preamble: `time = ctx.now - ctx.state_timers[<this state id>]`.
+State ids are assigned in `recurse()` DFS pre-order; `BaseGenerator._index_state_ids()` replays
+that walk so cross-references can look up the same id.
+
+### AND Joins and `time`
+
+A join (`@A` targeting an `ands:` node) is emitted into the firing source's `_do`. The compound
+condition that checks the **other** sources must therefore rebase any `time` in those guards to
+each source's own timer via `fmt_time_since(state_id)` (`ctx.now - ctx.state_timers[id]`), since a
+bare `time` would otherwise resolve to the firing state's elapsed time. The compound also AND-s in
+`fmt_not(...)` of each other source's **preceding** transition guards (those listed before its join
+edge, recorded as `preceding_guards` in `collect_and_inputs()`), so the join only fires when no
+higher-priority transition of that source would have fired first — preserving transition ordering
+across regions. See fixtures `and-time-join-python` and `and-order-join-python`.
+
 ## C Backend Notes
 
 The C generator produces a `.h` header and `.c` source file. Key differences from Rust:

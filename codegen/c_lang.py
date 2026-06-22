@@ -233,6 +233,9 @@ void inspect_{c_name}(SM_Context* ctx, char* buf, size_t* off, size_t max) {{
         # In C, IN_STATE(X) expands to the macro IN_STATE_X
         return re.sub(r'IN_STATE\(([\w_]+)\)', r'IN_STATE_\1', guard_str)
 
+    def fmt_time_since(self, state_id):
+        return f"(ctx->now - ctx->state_timers[{state_id}])"
+
     def gen_in_state_impl(self, c_name, parent_run_ptr):
         # C uses macros instead of impl methods
         self.macros.append(f"#define IN_STATE_{c_name} (ctx->{parent_run_ptr} == state_{c_name}_do)")

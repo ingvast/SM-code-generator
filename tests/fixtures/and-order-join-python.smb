@@ -1,0 +1,54 @@
+SM-builder-version: "0.6.0"
+language: python
+
+# Verifies that an AND join honors the *other* source's transition ordering.
+#
+# RegA/SA (ticked first) feeds AND node A1. RegB/SB (ticked second) also feeds
+# A1, but lists a higher-priority transition to /Escaped *before* its join edge.
+# At step=2 every guard is satisfied simultaneously. Because RegA ticks first
+# and would evaluate the join, the join must NOT fire: SB's preceding /Escaped
+# transition has higher priority. The negated preceding-guard clause in the
+# join's compound condition blocks it, so SB takes /Escaped instead.
+
+context: |
+    step: int
+
+context_init: |
+    ctx.step = 0
+
+hooks:
+  transition: |
+    print(f"{ctx.step:02d}: {t_src} -> {t_dst}")
+
+initial: Parallel
+
+states:
+  Parallel:
+    orthogonal: true
+    ands:
+      A1:
+        - to: /Joined
+    states:
+      RegA:
+        initial: SA
+        states:
+          SA:
+            transitions:
+              - guard: ctx.step >= 2
+                to: "../../@A1"
+      RegB:
+        initial: SB
+        states:
+          SB:
+            transitions:
+              - guard: ctx.step >= 2     # higher priority than the join edge
+                to: /Escaped
+              - guard: ctx.step >= 2
+                to: "../../@A1"
+
+  Joined:
+    transitions:
+      - to: null
+  Escaped:
+    transitions:
+      - to: null

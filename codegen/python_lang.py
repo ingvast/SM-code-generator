@@ -217,6 +217,9 @@ def inspect_{c_name}(ctx, buf):
     def fmt_guard_expand(self, guard_str):
         return re.sub(r'IN_STATE\(([\w_]+)\)', r'ctx.in_state_\1()', guard_str)
 
+    def fmt_not(self, cond):
+        return f"not ({cond})"
+
     def gen_in_state_impl(self, c_name, parent_run_ptr):
         method = f"""
     def in_state_{c_name}(self):

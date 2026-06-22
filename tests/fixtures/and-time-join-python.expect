@@ -1,0 +1,10 @@
+00: /Parallel/[RegA/SA,RegB/SB1]
+01: /Parallel/[RegA/SA,RegB/SB1]
+02: /Parallel/RegB/SB1 -> /Parallel/RegB/SB2
+02: /Parallel/[RegA/SA,RegB/SB2]
+03: /Parallel/[RegA/SA,RegB/SB2]
+04: /Parallel/RegA/SA -> /Done
+04: /Done
+05: /Done -> Termination
+05: FINISHED
+done

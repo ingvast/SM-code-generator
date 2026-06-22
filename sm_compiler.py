@@ -67,21 +67,26 @@ def collect_and_inputs(data):
     and_inputs = {}
 
     def walk(name_path, state_data):
+        # Guards of transitions listed before the current one (higher priority).
+        preceding = []
         for t in state_data.get('transitions', []):
             raw_target = t.get('to')
-            if not isinstance(raw_target, str) or '@' not in raw_target:
-                continue
-            try:
-                kind, _rules, scope = resolve_pseudo_ref(raw_target, name_path, index)
-            except (KeyError, ValueError):
-                continue
-            if kind != 'and':
-                continue
-            key = (tuple(scope[:-1]), scope[-1])
-            and_inputs.setdefault(key, []).append({
-                'source_path': name_path,
-                'guard': t.get('guard'),
-            })
+            is_and = False
+            if isinstance(raw_target, str) and '@' in raw_target:
+                try:
+                    kind, _rules, scope = resolve_pseudo_ref(raw_target, name_path, index)
+                    is_and = (kind == 'and')
+                except (KeyError, ValueError):
+                    is_and = False
+            if is_and:
+                key = (tuple(scope[:-1]), scope[-1])
+                and_inputs.setdefault(key, []).append({
+                    'source_path': name_path,
+                    'guard': t.get('guard'),
+                    'preceding_guards': list(preceding),
+                })
+            # This transition now precedes any that follow in the list.
+            preceding.append(t.get('guard'))
         for child_name, child_data in (state_data.get('states') or {}).items():
             if isinstance(child_data, dict):
                 walk(name_path + [child_name], child_data)

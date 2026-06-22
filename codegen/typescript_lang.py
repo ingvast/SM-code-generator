@@ -177,6 +177,9 @@ function inspect_{c_name}(ctx: Context, buf: string[]): void {{
     def fmt_guard_expand(self, guard_str):
         return re.sub(r'IN_STATE\(([\w_]+)\)', r'ctx.inState_\1()', guard_str)
 
+    def fmt_time_since(self, state_id):
+        return f"(ctx.now - ctx.stateTimers[{state_id}])"
+
     def gen_in_state_impl(self, c_name, parent_run_ptr):
         method = f"""
     inState_{c_name}(): boolean {{

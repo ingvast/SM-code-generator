@@ -249,3 +249,20 @@ def test_and_cross_boundary(lang, tmp_path):
     actual = run_pipeline("and-cross-boundary-python.smb", lang, tmp_path)
     check_output(actual, "and-cross-boundary-python.smb", lang)
 
+@pytest.mark.parametrize("lang", get_languages("and-time-join-python.smb"))
+def test_and_time_join(lang, tmp_path):
+    """AND join with the special `time` variable in source guards. Each source's
+    `time` must be measured from that source's own entry, not from the firing
+    region's. SB2 is entered later than SA, so the join fires at now=4 (SB2
+    active >= 2), not at now=3."""
+    actual = run_pipeline("and-time-join-python.smb", lang, tmp_path)
+    check_output(actual, "and-time-join-python.smb", lang)
+
+@pytest.mark.parametrize("lang", get_languages("and-order-join-python.smb"))
+def test_and_order_join(lang, tmp_path):
+    """AND join must honor the other source's transition ordering. RegA ticks
+    first and would evaluate the join, but RegB lists a higher-priority /Escaped
+    transition before its join edge. The join is suppressed so RegB escapes."""
+    actual = run_pipeline("and-order-join-python.smb", lang, tmp_path)
+    check_output(actual, "and-order-join-python.smb", lang)
+

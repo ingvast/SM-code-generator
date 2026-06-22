@@ -1,0 +1,7 @@
+00: /Parallel/[RegA/SA,RegB/SB]
+01: /Parallel/[RegA/SA,RegB/SB]
+02: /Parallel/RegB/SB -> /Escaped
+02: /Escaped
+03: /Escaped -> Termination
+03: FINISHED
+done

@@ -1,0 +1,54 @@
+SM-builder-version: "0.6.0"
+language: python
+
+# Verifies that the special `time` variable in an AND-join guard is measured
+# from each *source* state's own entry, not from the firing region's entry.
+#
+# Parallel has two regions feeding AND node A1:
+#   RegA/SA       reaches A1 when time >= 2 (SA entered at now=0, ready at now=2)
+#   RegB/SB2      reaches A1 when time >= 2, but SB2 is only entered at now=2
+#                 (after SB1 -> SB2, itself gated on time >= 2), so SB2 is
+#                 ready at now=4.
+#
+# The join may only fire once BOTH sources have been active >= 2 in their own
+# right. The earlier (buggy) behaviour measured SB2's guard from SA's entry and
+# fired at now=3; the correct behaviour fires at now=4.
+
+context: |
+    pass
+
+hooks:
+  transition: |
+    print(f"{int(ctx.now):02d}: {t_src} -> {t_dst}")
+
+initial: Parallel
+
+states:
+  Parallel:
+    orthogonal: true
+    ands:
+      A1:
+        - to: /Done
+    states:
+      RegA:
+        initial: SA
+        states:
+          SA:
+            transitions:
+              - guard: time >= 2
+                to: "../../@A1"
+      RegB:
+        initial: SB1
+        states:
+          SB1:
+            transitions:
+              - guard: time >= 2
+                to: SB2
+          SB2:
+            transitions:
+              - guard: time >= 2
+                to: "../../@A1"
+
+  Done:
+    transitions:
+      - to: null

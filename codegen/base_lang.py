@@ -93,6 +93,17 @@ class BaseGenerator(ABC):
         """Expand IN_STATE(...) macros in guard conditions. Default: Rust syntax."""
         return re.sub(r'IN_STATE\(([\w_]+)\)', r'ctx.in_state_\1()', guard_str)
 
+    def fmt_time_since(self, state_id):
+        """Elapsed-time expression for a specific state's timer. Default: Rust/Python syntax.
+
+        Used to rebase the `time` variable in a cross-source AND-join guard so it
+        refers to that source state's entry time rather than the firing state's."""
+        return f"(ctx.now - ctx.state_timers[{state_id}])"
+
+    def fmt_not(self, cond):
+        """Logical negation of a condition. Default: Rust/C/TS syntax."""
+        return f"!({cond})"
+
     def gen_in_state_impl(self, c_name, parent_run_ptr):
         """Generate in_state check (Rust: impl method, C: macro). Default: Rust."""
         method = f"""
@@ -145,8 +156,25 @@ class BaseGenerator(ABC):
         """Format an entry/start function name for the given state path."""
         return "state_" + flatten_name(path, "_") + suffix
 
+    def _index_state_ids(self):
+        """Map each state path (tuple) to the state id baked into its FUNC_PREAMBLE.
+
+        Replays the exact DFS pre-order used by recurse() so the ids line up with
+        the state_timers[...] indices. Used to rebase cross-source `time` guards."""
+        self.state_ids = {}
+        counter = 0
+        def walk(name_path, data):
+            nonlocal counter
+            self.state_ids[tuple(name_path)] = counter
+            counter += 1
+            for child_name, child_data in (data.get('states') or {}).items():
+                if isinstance(child_data, dict):
+                    walk(name_path + [child_name], child_data)
+        walk(['root'], self.data)
+
     def generate(self):
         """Run the full generation pipeline: recurse, inspect, assemble."""
+        self._index_state_ids()
         root_data = {
             'initial': self.data['initial'],
             'states': self.data['states'],
@@ -259,10 +287,29 @@ class BaseGenerator(ABC):
                     conditions = []
                     for s in other_sources:
                         s_c_name = flatten_name(s['source_path'], "_")
+                        src_id = self.state_ids[tuple(s['source_path'])]
+
+                        # Rebase the special `time` variable to this source's own
+                        # entry timer, since these guards are emitted into the firing
+                        # state's body where bare `time` means the firing state's time.
+                        # The lookbehind refuses member access (ctx.time) and longer
+                        # identifiers; `\b` refuses suffixes (time_out, lifetime).
+                        # Limitation: a literal "time" inside a string is still matched.
+                        def rebase(g, sid=src_id):
+                            return re.sub(r'(?<![\w.])time\b', self.fmt_time_since(sid), str(g))
+
                         conditions.append(f"IN_STATE({s_c_name})")
                         guard = s.get('guard')
                         if guard and guard is not True:
-                            conditions.append(str(guard))
+                            conditions.append(rebase(guard))
+                        # Honor the source's transition ordering: the join may only
+                        # fire if none of the source's higher-priority transitions
+                        # (listed before its join edge) would have fired first.
+                        for pg in s.get('preceding_guards', []):
+                            if pg is None or pg is True:
+                                conditions.append(self.FALSE_LIT)
+                            elif pg is not False:
+                                conditions.append(self.fmt_not(rebase(pg)))
                     compound = self.BOOL_AND.join(conditions)
                     compound = self.fmt_guard_expand(compound)
                     code += f"{indent}    {self.fmt_if_open(compound)}\n"
