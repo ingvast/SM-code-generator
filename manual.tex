@@ -23,7 +23,7 @@
 
 % Listings setup for YAML
 \lstdefinelanguage{YAML}{
-  keywords={states, initial, transitions, guard, action, to, do, entry, exit, orthogonal, hooks, decisions, context, context_init, includes, history, language},
+  keywords={states, initial, transitions, guard, action, to, do, entry, exit, orthogonal, hooks, decisions, ands, context, context_init, includes, history, language, SM-builder-version},
   keywordstyle=\color{yamlkey}\bfseries,
   ndkeywords={true, false, null},
   ndkeywordstyle=\color{yamlval}\bfseries,
@@ -132,21 +132,38 @@ This tool generates a safety-critical Hierarchical State Machine (HSM) from a YA
 
 The generator also produces a \textbf{Graphviz DOT} file for visualizing the state machine diagram.
 
+\section{Obtaining and Installing}
+
+The source code is hosted on GitHub:
+
+\begin{center}
+\texttt{https://github.com/ingvast/SM-code-generator}
+\end{center}
+
+Clone the repository and follow the build and installation instructions in the \texttt{README.md} file in the repository root. In short, the tool is packaged as a Python wheel and installed via \texttt{uv}:
+
+\begin{lstlisting}[language=Bash]
+uv build
+uv tool install dist/smbuilder-*.whl
+\end{lstlisting}
+
+After installation the \texttt{sm-compiler} command is available on your \texttt{PATH}.
+
 \section{Generating the Code}
-The generator is a Python script (\texttt{sm-compiler.py}) that validates your model and produces code in the selected target language.
+The \texttt{sm-compiler} command validates your model and produces code in the selected target language.
 
 \begin{lstlisting}[language=Bash, caption=Command Line Usage]
 # Language is read from the 'language:' key in the .smb file
-uv run python sm-compiler.py model.smb
+sm-compiler model.smb
 
 # Override the language
-uv run python sm-compiler.py model.smb --lang rust
-uv run python sm-compiler.py model.smb --lang c
-uv run python sm-compiler.py model.smb --lang typescript
+sm-compiler model.smb --lang rust
+sm-compiler model.smb --lang c
+sm-compiler model.smb --lang typescript
 
 # Custom output base path (extensions added automatically)
 # Produces build/myfsm.rs and build/myfsm.dot
-uv run python sm-compiler.py model.smb -o build/myfsm
+sm-compiler model.smb -o build/myfsm
 \end{lstlisting}
 
 \subsection{Command Line Options}
@@ -517,7 +534,7 @@ The \texttt{to:} keyword supports several addressing modes:
 \texttt{../sibling} & Move up one level to the parent and find a sibling (a child of the parent). Equivalent to bare \texttt{sibling}. Each additional \texttt{../} climbs one more level, so \texttt{../../uncle} is a sibling of the parent, \texttt{../../../x} a sibling of the grandparent, and so on. \\
 \texttt{.} & Self-transition: the state exits and immediately re-enters. \\
 \texttt{null} & Machine termination. Exits all states up to root and stops. \\
-\texttt{@decision\_name} & Delegate to a named decision tree (see Section~\ref{sec:decisions}). \\
+\texttt{@Name} & Delegate to a named decision or AND pseudo-state (see Sections~\ref{sec:decisions}--\ref{sec:and}). The path prefix follows exactly the same rules as for state paths: bare \texttt{@Name} resolves in the calling state's parent container, \texttt{./Child/@Name} goes into a child, \texttt{../Sibling/@Name} steps up then down, \texttt{/@Name} is an absolute root reference, etc. \\
 \texttt{/path/[a/tgt, b/tgt]} & Explicit fork into an orthogonal state (see Section~\ref{sec:orthogonal}). \\
 \bottomrule
 \end{longtable}
@@ -607,9 +624,11 @@ You can enter an orthogonal state by targeting its children directly.
 A transition from one region to another region within the same orthogonal parent is a \textbf{cross-limb transition}. The generator handles this by exiting the target region's current state and entering the new target, while the source region remains unaffected.
 
 \subsection{Joining (Synchronization)}
-To ``join'' parallel states, place a transition on the \textbf{parent} that checks the status of the \textbf{children}.
+There are two ways to join parallel regions.
 
-\begin{lstlisting}[language=YAML, caption={Join pattern (Rust guards)}]
+\textbf{Manual join (all versions):} Place a transition on the \textbf{parent} or on any state that checks \texttt{IN\_STATE()} for all regions simultaneously.
+
+\begin{lstlisting}[language=YAML, caption={Manual join pattern (Rust guards)}]
 main_task:
   orthogonal: true
   states:
@@ -638,14 +657,33 @@ main_task:
 
 \textbf{Note:} Use the \texttt{IN\_STATE(X)} macro in guards for portable state checks. In Rust and Python, it expands to \texttt{ctx.in\_state\_X()}. In TypeScript, it expands to \texttt{ctx.inState\_X()}. In C, it expands to the \texttt{IN\_STATE\_X} macro.
 
+\textbf{AND join nodes (\texttt{SM-builder-version: "0.6.0"}+):} For a cleaner, declaration-based approach that composes across any number of sources and any hierarchy depth, use an \texttt{ands:} block (see Section~\ref{sec:and}). The compiler generates the compound \texttt{IN\_STATE} guards automatically.
+
 \section{Decisions (Logic Trees)}
 \label{sec:decisions}
 Decisions allow you to externalize branching logic. A decision node can point to states, or \textbf{chain to other decisions}.
 
 \textbf{Restriction:} You cannot use \texttt{action} or \texttt{hooks} inside a decision block. Actions must be placed on the transition \textit{leading to} the decision, or on the state transitions following it.
 
+\subsection{Legacy Mode (before \texttt{SM-builder-version: "0.6.0"})}
+Decisions are collected into a \textbf{flat global namespace}; names must be unique across the entire model. All \texttt{@} references are bare (\texttt{@Name}) and look up from this global dict.
+
+\subsection{Hierarchical Mode (\texttt{SM-builder-version: "0.6.0"} and later)}
+\label{sec:hier}
+Add \texttt{SM-builder-version: "0.6.0"} (or higher) at the top of your file to enable hierarchical pseudo-state scoping. Each \texttt{decisions:} block is owned by the state it is defined in, and \texttt{@} references are \textbf{path-qualified} — they resolve relative to the calling state's parent container, not a global dict.
+
+Benefits:
+\begin{itemize}
+  \item Multiple states can each define a \texttt{@Check} decision without name collisions.
+  \item References are local by default but can cross container boundaries when needed.
+\end{itemize}
+
+References to pseudo-states follow the same path syntax as references to states (see Section~\ref{sec:paths}): the prefix (\texttt{./}, \texttt{../}, \texttt{/absolute/}, bare sibling, etc.) navigates to a container, and \texttt{@Name} selects the pseudo-state within it instead of a child state.
+
+\textbf{Note:} Target paths inside decision \emph{rules} (the \texttt{to:} fields inside the decision's own rule list) resolve from the \textbf{decision's own scope}, not from the calling state. This is the same behaviour as in legacy mode.
+
 \subsection{Defining Decisions}
-Decisions can be defined at the root level or within any state. They are collected into a flat namespace, so names must be unique across the entire model.
+Decisions can be defined at the root level or within any state.
 
 \begin{lstlisting}[language=YAML, caption={Decision tree definition}]
 decisions:
@@ -671,7 +709,7 @@ transitions:
     to: "@validate_input"
 \end{lstlisting}
 
-Decisions can also be defined locally within a state:
+Decisions can also be defined locally within a state and referenced with a bare name from sibling states:
 
 \begin{lstlisting}[language=YAML, caption={Local decision definition}]
 my_state:
@@ -688,6 +726,176 @@ my_state:
     positive: {}
     negative: {}
 \end{lstlisting}
+
+\section{AND Join Nodes}
+\label{sec:and}
+AND join nodes (available in \texttt{SM-builder-version: "0.6.0"} and later) provide a declarative way to synchronize multiple concurrent activities. An AND node fires only when \textbf{all} of its source states are simultaneously active and all per-source guards are satisfied. This replaces the need to manually write \texttt{IN\_STATE()} conjunctions or to chain decision nodes for synchronization.
+
+\subsection{Defining AND Nodes}
+Use the \texttt{ands:} block at any container level, with the same structure as \texttt{decisions:}.
+
+\begin{lstlisting}[language=YAML, caption={AND node definition inside an orthogonal state}]
+SM-builder-version: "0.6.0"
+language: python
+
+initial: Parallel
+
+states:
+  Parallel:
+    orthogonal: true
+    ands:
+      J1:              # Name of the AND join node
+        - to: /Done    # What to do when ALL sources are ready
+    states:
+      RegA:
+        initial: Working
+        states:
+          Working:
+            transitions:
+              - guard: ctx.step >= 2
+                to: "../../@J1"   # Reference J1 two levels up (inside Parallel)
+      RegB:
+        initial: Processing
+        states:
+          Processing:
+            transitions:
+              - guard: ctx.step >= 3
+                to: "../../@J1"
+  Done:
+    transitions:
+      - to: null
+\end{lstlisting}
+
+The generated code for \texttt{Working}'s transition automatically becomes:
+\begin{lstlisting}[language=Python]
+# Guard for Working -> @J1:
+if ctx.step >= 2:
+    if ctx.in_state_root_Parallel_RegB_Processing() and ctx.step >= 3:
+        # -- fire AND's outgoing rule: to /Done --
+\end{lstlisting}
+The compound condition (\texttt{in\_state(Other) and other\_guard}) is generated automatically from the reverse-edge information collected at compile time. No manual \texttt{IN\_STATE} conjunctions needed.
+
+\subsection{Use Case 1 --- Synchronization Join (Sibling Regions)}
+This is the most common pattern: two or more regions inside the same orthogonal state each independently work toward a ``ready'' sub-state, and the whole machine proceeds only when all regions are ready simultaneously.
+
+\begin{lstlisting}[language=YAML, caption={3-way synchronization join}]
+SM-builder-version: "0.6.0"
+
+Parallel:
+  orthogonal: true
+  ands:
+    AllDone:
+      - to: /Final
+  states:
+    RegA:
+      initial: A
+      states:
+        A:
+          transitions:
+            - guard: ctx.step >= 2
+              to: "../../@AllDone"
+    RegB:
+      initial: B
+      states:
+        B:
+          transitions:
+            - guard: ctx.step >= 3
+              to: "../../@AllDone"
+    RegC:
+      initial: C
+      states:
+        C:
+          transitions:
+            - guard: ctx.step >= 4
+              to: "../../@AllDone"
+\end{lstlisting}
+
+The join fires at \texttt{step = 4} --- when the last region (RegC) becomes ready. At \texttt{step = 2} and \texttt{step = 3}, the composite guard blocks even though RegA or RegB are ready, because the other regions have not yet satisfied their guards.
+
+\textbf{Transition ordering is preserved}: if a source state has higher-priority transitions listed \emph{before} its AND edge, those transitions take precedence and the AND gate is suppressed for that cycle, matching the normal UML priority rule.
+
+\subsection{Use Case 2 --- Cross-Boundary Join (Any Combination of Sources)}
+AND sources do not need to be in the same orthogonal state. They can come from any states anywhere in the tree --- different nesting depths, different branches, or even non-orthogonal states.
+
+\begin{lstlisting}[language=YAML, caption={AND node at root level, sources from nested composites}]
+SM-builder-version: "0.6.0"
+
+ands:            # Root-level AND node
+  J1:
+    - to: /Done
+
+initial: Root
+states:
+  Root:
+    orthogonal: true
+    states:
+      OrthoA:
+        orthogonal: true   # Nested orthogonal
+        states:
+          Worker:
+            initial: ActiveA
+            states:
+              ActiveA:
+                transitions:
+                  - guard: ctx.step >= 2
+                    to: "/@J1"   # Absolute reference to root-level AND
+      OrthoB:
+        initial: ActiveB
+        states:
+          ActiveB:
+            transitions:
+              - guard: ctx.step >= 3
+                to: "/@J1"
+  Done:
+    transitions:
+      - to: null
+\end{lstlisting}
+
+\texttt{ActiveA} lives at depth 5 inside a doubly-nested orthogonal region; \texttt{ActiveB} is at depth 4 in a sibling region. Both reference the same root-level join node via \texttt{/@J1}. The generated guard for \texttt{ActiveA} is:
+\begin{lstlisting}[language=Python]
+if ctx.step >= 2:
+    if ctx.in_state_root_Root_OrthoB_ActiveB() and ctx.step >= 3:
+        # fire J1's rule: to /Done
+\end{lstlisting}
+
+\subsection{Use Case 3 --- Replacing Chained Decisions}
+Without AND nodes, synchronizing two flags often required chaining two decisions:
+
+\begin{lstlisting}[language=YAML, caption={Old pattern: manual chaining}]
+decisions:
+  check_both:
+    - guard: "IN_STATE(root_Parallel_RegA_Done) && IN_STATE(root_Parallel_RegB_Done)"
+      to: /Final
+    - to: stay_here  # dummy self-loop
+\end{lstlisting}
+
+With an AND node, the same semantics are expressed declaratively:
+
+\begin{lstlisting}[language=YAML, caption={New pattern: AND node (0.6.0+)}]
+ands:
+  BothDone:
+    - to: /Final
+
+# Then in each region's Done state:
+transitions:
+  - to: "@BothDone"
+\end{lstlisting}
+
+The AND node is less error-prone (no manual state name strings), adapts automatically when states are renamed, and composes cleanly across N sources without O(N) chaining.
+
+\subsection{Per-Source Guards and the \texttt{time} Variable}
+Each incoming edge to an AND node may carry its own \texttt{guard}. When the AND fires from source state X, the generated code ANDs in every other source's \texttt{in\_state()} check \emph{plus} that source's guard expression.
+
+If a guard uses the special \texttt{time} variable, it is automatically rebased to that source state's own entry timestamp, not the firing state's timer:
+\begin{lstlisting}[language=Python]
+# Guard in RegB: time >= 2.0  ->  fires if RegB has been active >= 2 s
+# When RegA fires the join, the generated check for RegB is:
+if ctx.in_state_RegB() and (ctx.now - ctx.state_timers[regb_id]) >= 2.0:
+    ...
+\end{lstlisting}
+
+\subsection{AND Node Rules}
+AND outgoing rules follow exactly the same syntax as decision rules: a list of \texttt{\{guard, to\}} entries evaluated top-to-bottom. The first matching rule fires. Rules inside the AND resolve paths from the AND node's own scope (the container it is defined in).
 
 \section{Complete Example}
 Below is a minimal but complete SMB file demonstrating the key features, with Rust as the target language.
