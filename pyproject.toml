@@ -19,6 +19,13 @@ build-backend = "setuptools.build_meta"
 py-modules = ["sm_compiler"]
 packages = ["codegen"]
 
+[tool.setuptools.data-files]
+# Installed on POSIX (Linux/macOS) to {prefix}/share/man/man1/.
+# On Windows the file is placed but no 'man' command exists, so it is harmless.
+# With 'uv tool install' the prefix is the tool's isolated venv; add
+# ~/.local/share/uv/tools/smbuilder/share/man/man1 to MANPATH to use it there.
+"share/man/man1" = ["sm-compiler.1"]
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
