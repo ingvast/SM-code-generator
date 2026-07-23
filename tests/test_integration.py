@@ -272,23 +272,52 @@ def test_and_order_join(lang, tmp_path):
     actual = run_pipeline("and-order-join-python.smb", lang, tmp_path)
     check_output(actual, "and-order-join-python.smb", lang)
 
+# AND-join reached through a decision. One fixture per language (guards/context
+# differ by language); all exercise the same regression: a decision-routed source
+# (RegB -> @D1 -> @A1) must gate the AND, and RegB's two decision branches must be
+# OR-combined (exercises BOOL_OR). The join fires at step 3, not step 1.
 @pytest.mark.parametrize("lang", get_languages("and-decision-join-python.smb"))
-def test_and_decision_join(lang, tmp_path):
-    """AND-join source that reaches the join THROUGH a decision (RegB -> @D1 -> @A1).
-    Such indirect sources must still gate the AND. Regression: collect_and_inputs
-    only recorded sources targeting @A directly, so the decision-routed source was
-    invisible and the direct source (RegA) fired the join ungated at step 1 instead
-    of step 3."""
+def test_and_decision_join_python(lang, tmp_path):
     actual = run_pipeline("and-decision-join-python.smb", lang, tmp_path)
     check_output(actual, "and-decision-join-python.smb", lang)
 
+@pytest.mark.parametrize("lang", get_languages("and-decision-join-rust.smb"))
+def test_and_decision_join_rust(lang, tmp_path):
+    actual = run_pipeline("and-decision-join-rust.smb", lang, tmp_path)
+    check_output(actual, "and-decision-join-rust.smb", lang)
+
+@pytest.mark.parametrize("lang", get_languages("and-decision-join-c.smb"))
+def test_and_decision_join_c(lang, tmp_path):
+    actual = run_pipeline("and-decision-join-c.smb", lang, tmp_path)
+    check_output(actual, "and-decision-join-c.smb", lang)
+
+@pytest.mark.parametrize("lang", get_languages("and-decision-join-typescript.smb"))
+def test_and_decision_join_typescript(lang, tmp_path):
+    actual = run_pipeline("and-decision-join-typescript.smb", lang, tmp_path)
+    check_output(actual, "and-decision-join-typescript.smb", lang)
+
+# Orthogonal `inner` nested inside orthogonal `outer`. A transition into one limb
+# (inner/limbA/deep) must also default-enter the sibling region (limbB/binit).
+# One fixture per language. Regression: implicit-orthogonal detection stopped at
+# the outermost orthogonal ancestor (already active/shared with the source) and
+# skipped forking, leaving the sibling region un-entered.
 @pytest.mark.parametrize("lang", get_languages("ortho-nested-entry-python.smb"))
-def test_ortho_nested_entry(lang, tmp_path):
-    """Orthogonal node (`inner`) nested inside another orthogonal node (`outer`).
-    A transition into one limb (inner/limbA/deep) must also default-enter the
-    sibling region (limbB/binit). Regression: the implicit-orthogonal detection
-    used to stop at the outermost orthogonal ancestor (already active/shared with
-    the source) and skip forking, leaving the sibling region un-entered."""
+def test_ortho_nested_entry_python(lang, tmp_path):
     actual = run_pipeline("ortho-nested-entry-python.smb", lang, tmp_path)
     check_output(actual, "ortho-nested-entry-python.smb", lang)
+
+@pytest.mark.parametrize("lang", get_languages("ortho-nested-entry-rust.smb"))
+def test_ortho_nested_entry_rust(lang, tmp_path):
+    actual = run_pipeline("ortho-nested-entry-rust.smb", lang, tmp_path)
+    check_output(actual, "ortho-nested-entry-rust.smb", lang)
+
+@pytest.mark.parametrize("lang", get_languages("ortho-nested-entry-c.smb"))
+def test_ortho_nested_entry_c(lang, tmp_path):
+    actual = run_pipeline("ortho-nested-entry-c.smb", lang, tmp_path)
+    check_output(actual, "ortho-nested-entry-c.smb", lang)
+
+@pytest.mark.parametrize("lang", get_languages("ortho-nested-entry-typescript.smb"))
+def test_ortho_nested_entry_typescript(lang, tmp_path):
+    actual = run_pipeline("ortho-nested-entry-typescript.smb", lang, tmp_path)
+    check_output(actual, "ortho-nested-entry-typescript.smb", lang)
 

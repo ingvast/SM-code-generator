@@ -1,0 +1,48 @@
+language: typescript
+
+# Regression test (TypeScript) for the "sibling region not entered" bug.
+# See ortho-nested-entry-python.smb for the full description.
+#
+# Orthogonal `inner` nested inside orthogonal `outer`; a transition into
+# inner/limbA/deep must also default-enter the sibling region limbB/binit.
+
+context: |
+    counter: number = 0;
+
+context_init: |
+    ctx.counter = 0;
+
+initial: outer
+
+states:
+
+  outer:
+    orthogonal: true
+    states:
+
+      main:
+        initial: src
+        states:
+          src:
+            transitions:
+              - guard: ctx.counter === 2
+                to: inner/limbA/deep
+          inner:
+            orthogonal: true
+            states:
+              limbA:
+                initial: deep
+                states:
+                  deep:
+                    transitions:
+                      - guard: ctx.counter === 4
+                        to: null
+              limbB:
+                initial: binit
+                states:
+                  binit: {}
+
+      sidecar:
+        initial: sc
+        states:
+          sc: {}

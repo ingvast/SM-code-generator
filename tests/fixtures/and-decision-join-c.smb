@@ -1,0 +1,54 @@
+SM-builder-version: "0.6.0"
+language: c
+
+# Regression test (C): an AND-join source that reaches the join THROUGH a
+# decision. See and-decision-join-python.smb for the full description.
+#
+# RegA/Working -> @A1 directly (ready at step >= 1); RegB/Working -> @D1 -> @A1
+# via a decision. The join must wait for RegB's decision condition (step >= 3).
+
+context: |
+    int step;
+
+context_init: |
+    sm->ctx.step = 0;
+
+hooks:
+  transition: |
+    printf("%02d: %s -> %s\n", ctx->step, t_src, t_dst);
+
+initial: Parallel
+
+states:
+  Parallel:
+    orthogonal: true
+    ands:
+      A1:
+        - to: /Done
+    states:
+      RegA:
+        initial: Working
+        states:
+          Working:
+            transitions:
+              - guard: ctx->step >= 1
+                to: "../../@A1"
+      RegB:
+        initial: Working
+        decisions:
+          # Two branches to the same AND -> RegB has TWO edges into A1, so the
+          # gate that checks RegB must OR them (exercises BOOL_OR). Their union
+          # is step >= 3, so the join still fires at step 3.
+          D1:
+            - guard: ctx->step >= 5
+              to: "../../@A1"
+            - guard: ctx->step >= 3
+              to: "../../@A1"
+        states:
+          Working:
+            transitions:
+              - to: "@D1"
+
+  Done:
+    transitions:
+      - to: null
