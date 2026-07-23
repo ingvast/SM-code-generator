@@ -1,0 +1,7 @@
+--- ortho-nested-entry ---
+00: /outer/[main/src,sidecar/sc]
+01: /outer/[main/src,sidecar/sc]
+02: /outer/[main/src,sidecar/sc]
+03: /outer/[main/inner/[limbA/deep,limbB/binit],sidecar/sc]
+04: /outer/[main/inner/[limbA/deep,limbB/binit],sidecar/sc]
+05: FINISHED

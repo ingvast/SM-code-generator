@@ -389,8 +389,13 @@ class BaseGenerator(ABC):
 
             # --- IMPLICIT ORTHOGONAL / LOCAL LIMB LOGIC ---
             if forks is None:
+                # Only orthogonal ancestors on the *newly entered* portion of the
+                # path (index >= lca_index) are fork points. Orthogonal ancestors
+                # above the LCA are already active and shared with the source, so
+                # forking them would be wrong (and picking the outermost one would
+                # mask a deeper orthogonal we actually need to fork into).
                 parallel_ancestor_idx = -1
-                for i in range(len(target_path)):
+                for i in range(lca_index, len(target_path)):
                     partial_path = target_path[:i+1]
                     s_data = resolve_state_data(self.data, partial_path)
                     if s_data and s_data.get('orthogonal', False):

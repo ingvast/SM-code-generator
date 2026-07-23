@@ -1,0 +1,54 @@
+language: python
+
+# Regression test for the "sibling region not entered" bug.
+#
+# Topology: an orthogonal node (`inner`) nested inside another orthogonal node
+# (`outer`). A transition targets ONE limb of `inner` (inner/limbA/deep) from a
+# sibling state (`src`) in the same outer-limb.
+#
+# Entering that limb must ALSO default-enter the other region `limbB` (and its
+# initial substate `binit`). The bug: the implicit-orthogonal detection scanned
+# from the root and stopped at the FIRST orthogonal ancestor (`outer`), which is
+# already active/shared with the source, so `is_same_limb` was true and the fork
+# logic was skipped -> `limbB` was never entered.
+
+context: |
+    counter: int
+
+context_init: |
+    ctx.counter = 0
+
+initial: outer
+
+states:
+
+  outer:
+    orthogonal: true
+    states:
+
+      main:
+        initial: src
+        states:
+          src:
+            transitions:
+              - guard: ctx.counter == 2
+                to: inner/limbA/deep
+          inner:
+            orthogonal: true
+            states:
+              limbA:
+                initial: deep
+                states:
+                  deep:
+                    transitions:
+                      - guard: ctx.counter == 4
+                        to: null
+              limbB:
+                initial: binit
+                states:
+                  binit: {}
+
+      sidecar:
+        initial: sc
+        states:
+          sc: {}

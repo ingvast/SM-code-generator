@@ -272,3 +272,13 @@ def test_and_order_join(lang, tmp_path):
     actual = run_pipeline("and-order-join-python.smb", lang, tmp_path)
     check_output(actual, "and-order-join-python.smb", lang)
 
+@pytest.mark.parametrize("lang", get_languages("ortho-nested-entry-python.smb"))
+def test_ortho_nested_entry(lang, tmp_path):
+    """Orthogonal node (`inner`) nested inside another orthogonal node (`outer`).
+    A transition into one limb (inner/limbA/deep) must also default-enter the
+    sibling region (limbB/binit). Regression: the implicit-orthogonal detection
+    used to stop at the outermost orthogonal ancestor (already active/shared with
+    the source) and skip forking, leaving the sibling region un-entered."""
+    actual = run_pipeline("ortho-nested-entry-python.smb", lang, tmp_path)
+    check_output(actual, "ortho-nested-entry-python.smb", lang)
+
