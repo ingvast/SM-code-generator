@@ -1,0 +1,55 @@
+SM-builder-version: "0.6.0"
+language: python
+
+# Regression test: an AND-join source that reaches the join THROUGH a decision.
+#
+# Parallel is orthogonal with two regions feeding AND node A1:
+#   - RegA/Working -> @A1          (direct edge, ready early at step >= 1)
+#   - RegB/Working -> @D1 -> @A1   (via decision D1, guarded by step >= 3)
+#
+# The AND must fire only when BOTH sources are ready. The bug: collect_and_inputs
+# only recorded sources targeting @A1 DIRECTLY, so the decision-routed RegB source
+# was invisible. RegA (which ticks first) then fired the join with no gate, exiting
+# Parallel at step 1 instead of step 3. With the fix RegA must wait for RegB's
+# decision condition (step >= 3), so the join fires at step 3.
+
+context: |
+    step: int
+
+context_init: |
+    ctx.step = 0
+
+hooks:
+  transition: |
+    print(f"{ctx.step:02d}: {t_src} -> {t_dst}")
+
+initial: Parallel
+
+states:
+  Parallel:
+    orthogonal: true
+    ands:
+      A1:
+        - to: /Done
+    states:
+      RegA:
+        initial: Working
+        states:
+          Working:
+            transitions:
+              - guard: ctx.step >= 1
+                to: "../../@A1"
+      RegB:
+        initial: Working
+        decisions:
+          D1:
+            - guard: ctx.step >= 3
+              to: "../../@A1"
+        states:
+          Working:
+            transitions:
+              - to: "@D1"
+
+  Done:
+    transitions:
+      - to: null

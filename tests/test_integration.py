@@ -272,6 +272,16 @@ def test_and_order_join(lang, tmp_path):
     actual = run_pipeline("and-order-join-python.smb", lang, tmp_path)
     check_output(actual, "and-order-join-python.smb", lang)
 
+@pytest.mark.parametrize("lang", get_languages("and-decision-join-python.smb"))
+def test_and_decision_join(lang, tmp_path):
+    """AND-join source that reaches the join THROUGH a decision (RegB -> @D1 -> @A1).
+    Such indirect sources must still gate the AND. Regression: collect_and_inputs
+    only recorded sources targeting @A directly, so the decision-routed source was
+    invisible and the direct source (RegA) fired the join ungated at step 1 instead
+    of step 3."""
+    actual = run_pipeline("and-decision-join-python.smb", lang, tmp_path)
+    check_output(actual, "and-decision-join-python.smb", lang)
+
 @pytest.mark.parametrize("lang", get_languages("ortho-nested-entry-python.smb"))
 def test_ortho_nested_entry(lang, tmp_path):
     """Orthogonal node (`inner`) nested inside another orthogonal node (`outer`).

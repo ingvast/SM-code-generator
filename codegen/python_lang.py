@@ -12,6 +12,7 @@ class PythonGenerator(BaseGenerator):
     FALSE_LIT = "False"
     COMMENT = "#"
     BOOL_AND = " and "
+    BOOL_OR = " or "
     LINE_SEP = "\n"
 
     FUNC_PREAMBLE = """\

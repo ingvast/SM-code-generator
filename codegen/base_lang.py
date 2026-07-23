@@ -28,6 +28,7 @@ class BaseGenerator(ABC):
     FALSE_LIT = "false"   # Boolean false literal (Python: "False")
     COMMENT = "//"        # Line comment prefix (Python: "#")
     BOOL_AND = " && "     # Boolean AND operator (Python: " and ")
+    BOOL_OR = " || "      # Boolean OR operator (Python: " or ")
 
     def __init__(self, data):
         self.data = data
@@ -289,10 +290,24 @@ class BaseGenerator(ABC):
                     if s['source_path'] != name_path
                 ]
                 if other_sources:
-                    conditions = []
+                    # Group edges by source region. A source is "ready" when it is
+                    # IN_STATE and ANY of its edges into this AND is enabled (OR
+                    # across a source's edges — a source may reach the AND via
+                    # several transitions or decision branches). Distinct sources
+                    # must all be ready (AND across groups).
+                    groups = {}
+                    order = []
                     for s in other_sources:
-                        s_c_name = flatten_name(s['source_path'], "_")
-                        src_id = self.state_ids[tuple(s['source_path'])]
+                        key = tuple(s['source_path'])
+                        if key not in groups:
+                            groups[key] = []
+                            order.append(key)
+                        groups[key].append(s)
+
+                    group_conditions = []
+                    for key in order:
+                        s_c_name = flatten_name(list(key), "_")
+                        src_id = self.state_ids[key]
 
                         # Rebase the special `time` variable to this source's own
                         # entry timer, since these guards are emitted into the firing
@@ -303,19 +318,38 @@ class BaseGenerator(ABC):
                         def rebase(g, sid=src_id):
                             return re.sub(r'(?<![\w.])time\b', self.fmt_time_since(sid), str(g))
 
-                        conditions.append(f"IN_STATE({s_c_name})")
-                        guard = s.get('guard')
-                        if guard and guard is not True:
-                            conditions.append(rebase(guard))
-                        # Honor the source's transition ordering: the join may only
-                        # fire if none of the source's higher-priority transitions
-                        # (listed before its join edge) would have fired first.
-                        for pg in s.get('preceding_guards', []):
-                            if pg is None or pg is True:
-                                conditions.append(self.FALSE_LIT)
-                            elif pg is not False:
-                                conditions.append(self.fmt_not(rebase(pg)))
-                    compound = self.BOOL_AND.join(conditions)
+                        edge_terms = []
+                        for s in groups[key]:
+                            parts = []
+                            for g in s.get('guards', []):
+                                if g is None or g is True:
+                                    continue
+                                if g is False:
+                                    parts.append(self.FALSE_LIT)
+                                else:
+                                    parts.append(rebase(g))
+                            # Honor transition/decision ordering: this edge is only
+                            # taken if no higher-priority guard would have fired first.
+                            for pg in s.get('preceding_guards', []):
+                                if pg is None or pg is True:
+                                    parts.append(self.FALSE_LIT)
+                                elif pg is not False:
+                                    parts.append(self.fmt_not(rebase(pg)))
+                            edge_terms.append(self.BOOL_AND.join(parts) if parts else None)
+
+                        cond = f"IN_STATE({s_c_name})"
+                        if any(t is None for t in edge_terms):
+                            # An unguarded edge makes the source ready whenever it is
+                            # active; the OR collapses to just the IN_STATE check.
+                            pass
+                        elif len(edge_terms) == 1:
+                            cond = self.BOOL_AND.join([cond, edge_terms[0]])
+                        else:
+                            or_expr = self.BOOL_OR.join(f"({t})" for t in edge_terms)
+                            cond = self.BOOL_AND.join([cond, f"({or_expr})"])
+                        group_conditions.append(cond)
+
+                    compound = self.BOOL_AND.join(group_conditions)
                     compound = self.fmt_guard_expand(compound)
                     code += f"{indent}    {self.fmt_if_open(compound)}\n"
                     for rule in decision_rules:

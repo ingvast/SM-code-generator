@@ -61,30 +61,67 @@ def collect_and_inputs(data):
     """Reverse-edge pass: for each AND pseudo-state, record all incoming transitions.
 
     Must be called after collect_pseudostates_hierarchical. Builds:
-      _and_inputs: {(container_tuple, name): [{'source_path': [...], 'guard': ...}]}
+      _and_inputs: {(container_tuple, name):
+                      [{'source_path': [...], 'guards': [...], 'preceding_guards': [...]}]}
+
+    A source may reach an AND node *through a decision* (e.g. `di-wash -> @D ->
+    @A`). Such indirect edges are followed here so the AND gate knows about every
+    real source, not just those that target `@A` directly. Each recorded edge
+    carries the accumulated `guards` (all must hold — the source transition guard
+    plus any decision-rule guards on the path) and `preceding_guards` (guards to
+    negate — higher-priority transitions/rules that would have been taken first).
+    A single source can produce several edges to the same AND (one per path); the
+    generator OR-combines a source's edges and AND-combines distinct sources.
     """
     index = data.get('_pseudostate_index', {})
     and_inputs = {}
+
+    def resolve_and_edges(ref, scope, guards, preceding, seen):
+        """Return [(and_key, guards, preceding)] for every AND reachable from
+        `ref`, following decision indirection. `seen` guards against cycles."""
+        try:
+            kind, rules, ref_scope = resolve_pseudo_ref(ref, scope, index)
+        except (KeyError, ValueError):
+            return []
+        if kind == 'and':
+            and_key = (tuple(ref_scope[:-1]), ref_scope[-1])
+            return [(and_key, list(guards), list(preceding))]
+        if kind == 'decision':
+            dkey = tuple(ref_scope)
+            if dkey in seen:
+                return []
+            seen = seen | {dkey}
+            results = []
+            dec_preceding = []  # guards of decision rules listed before this one
+            for r in rules:
+                r_to = r.get('to')
+                r_guard = r.get('guard')
+                r_guards = guards + ([r_guard] if r_guard not in (None, True) else [])
+                r_preceding = preceding + list(dec_preceding)
+                if isinstance(r_to, str) and '@' in r_to:
+                    results.extend(
+                        resolve_and_edges(r_to, ref_scope, r_guards, r_preceding, seen)
+                    )
+                dec_preceding.append(r_guard)
+            return results
+        return []
 
     def walk(name_path, state_data):
         # Guards of transitions listed before the current one (higher priority).
         preceding = []
         for t in state_data.get('transitions', []):
             raw_target = t.get('to')
-            is_and = False
             if isinstance(raw_target, str) and '@' in raw_target:
-                try:
-                    kind, _rules, scope = resolve_pseudo_ref(raw_target, name_path, index)
-                    is_and = (kind == 'and')
-                except (KeyError, ValueError):
-                    is_and = False
-            if is_and:
-                key = (tuple(scope[:-1]), scope[-1])
-                and_inputs.setdefault(key, []).append({
-                    'source_path': name_path,
-                    'guard': t.get('guard'),
-                    'preceding_guards': list(preceding),
-                })
+                t_guard = t.get('guard')
+                base_guards = [t_guard] if t_guard not in (None, True) else []
+                for key, guards, precs in resolve_and_edges(
+                    raw_target, name_path, base_guards, list(preceding), set()
+                ):
+                    and_inputs.setdefault(key, []).append({
+                        'source_path': name_path,
+                        'guards': guards,
+                        'preceding_guards': precs,
+                    })
             # This transition now precedes any that follow in the list.
             preceding.append(t.get('guard'))
         for child_name, child_data in (state_data.get('states') or {}).items():
