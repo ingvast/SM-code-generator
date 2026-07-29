@@ -180,9 +180,24 @@ def validate_model(data):
     errors = []
     is_hierarchical = data.get('_is_hierarchical_refs', False)
     pseudostate_index = data.get('_pseudostate_index', {})
+    # Maps sanitized identifier -> first display path that produced it, so two
+    # distinct states that flatten to the same identifier (e.g. 'a-/b' and
+    # 'a/_b' both -> 'a__b') are caught before they collide in generated code.
+    seen_ids = {}
 
     def check_state(name_path, state_data):
         display_name = "/" + "/".join(name_path[1:])
+
+        flat_id = flatten_name(name_path, "_")
+        if flat_id in seen_ids:
+            errors.append(
+                f"State '{display_name}' collides with '{seen_ids[flat_id]}': "
+                f"both map to the generated identifier '{flat_id}'. "
+                f"Rename one so they differ after non-alphanumeric characters "
+                f"are converted to '_'."
+            )
+        else:
+            seen_ids[flat_id] = display_name
 
         if 'states' in state_data:
             # CHANGED: Check 'orthogonal' instead of 'parallel'

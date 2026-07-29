@@ -1,0 +1,23 @@
+language: python
+
+# Negative fixture: two sibling states whose names differ only by characters
+# that sanitize_identifier() collapses to '_'. Both 'b-c' and 'b_c' flatten to
+# the generated identifier 'run_b_c', which must be rejected by validate_model
+# rather than silently producing colliding state functions.
+
+initial: run
+
+states:
+
+  run:
+    initial: b-c
+
+    states:
+      b-c:
+        transitions:
+          - guard: "True"
+            to: b_c
+      b_c:
+        transitions:
+          - guard: "True"
+            to: null

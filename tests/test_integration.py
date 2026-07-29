@@ -321,3 +321,20 @@ def test_ortho_nested_entry_typescript(lang, tmp_path):
     actual = run_pipeline("ortho-nested-entry-typescript.smb", lang, tmp_path)
     check_output(actual, "ortho-nested-entry-typescript.smb", lang)
 
+
+def test_identifier_collision_rejected(tmp_path):
+    """Two states whose names differ only by characters that sanitize_identifier
+    collapses to '_' (siblings 'b-c' and 'b_c', both -> 'run_b_c') must be
+    rejected by validate_model instead of silently generating colliding state
+    functions. The compiler should exit non-zero and name both offenders."""
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "sm_compiler.py"),
+         str(FIXTURES / "identifier-collision.smb"),
+         "-o", str(tmp_path / "statemachine")],
+        capture_output=True, text=True,
+    )
+    assert result.returncode != 0, "Compiler accepted a colliding-identifier model"
+    assert "run_b_c" in result.stdout, (
+        f"Expected the colliding identifier in the error output:\n{result.stdout}"
+    )
+
