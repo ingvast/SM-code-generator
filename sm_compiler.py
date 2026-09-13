@@ -491,7 +491,7 @@ def main():
         try:
             print(version("smbuilder"))
         except PackageNotFoundError:
-            print("0.2.0 (development)")
+            print("0.7.0 (development)")
         return
 
     if not args.file:
