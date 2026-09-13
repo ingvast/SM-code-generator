@@ -38,10 +38,11 @@ uv run python sm_compiler.py model.smb --phoenix
 # Skip source code generation (e.g. only --dot/--png)
 uv run python sm_compiler.py model.smb --png --no-code
 
-# Build distributable package
+# Build distributable package (bump `version` in pyproject.toml first)
 uv build
-# Install from wheel (makes `sm-compiler` available in PATH)
-uv tool install dist/smbuilder-0.2.2-py3-none-any.whl
+# Install/upgrade the `sm-compiler` command on PATH (--force replaces an older install)
+uv tool install --force dist/smbuilder-0.7.0-py3-none-any.whl
+uv tool list              # shows the installed smbuilder version
 
 # Run the test suite
 uv run pytest
@@ -56,6 +57,11 @@ uv run python sm_compiler.py model.smb --png && open statemachine.png
 ```
 
 Python 3.14, managed with `uv`. Dependencies: `pyyaml`, `pytest` (dev).
+
+**Installing the CLI:** use `uv tool install`, not `uv pip install`. The `sm-compiler` on PATH
+(`~/.local/bin/sm-compiler`) runs from uv's isolated tool environment
+(`~/.local/share/uv/tools/smbuilder`). `uv pip install <wheel>` only installs into the project
+`.venv` (used by `uv run`), so `sm-compiler --version` keeps reporting the old tool version.
 
 ## Architecture
 
