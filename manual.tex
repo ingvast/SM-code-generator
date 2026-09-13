@@ -164,6 +164,10 @@ sm-compiler model.smb --lang typescript
 # Custom output base path (extensions added automatically)
 # Produces build/myfsm.rs and build/myfsm.dot
 sm-compiler model.smb -o build/myfsm
+
+# Export to Phoenix YAML only (no source code)
+# Produces build/myfsm-phoenix.yaml
+sm-compiler model.smb --phoenix -o build/myfsm
 \end{lstlisting}
 
 \subsection{Command Line Options}
@@ -175,6 +179,8 @@ sm-compiler model.smb -o build/myfsm
 \texttt{file} & (required) & Path to the input \texttt{.smb} file. \\
 \texttt{-{}-lang} & from file & Output language: \texttt{rust}, \texttt{c}, \texttt{python}, or \texttt{typescript}. If omitted, reads the \texttt{language:} key from the SMB file (defaults to \texttt{rust} if absent). The \texttt{language:} key may be a list, in which case code is generated for all listed languages. \\
 \texttt{-o}, \texttt{-{}-output} & \texttt{./statemachine} & Output base path without extension. Language-specific extensions (\texttt{.rs}, \texttt{.c}, \texttt{.h}, \texttt{.py}, \texttt{.ts}, \texttt{.dot}) are appended automatically. Parent directories are created if needed. \\
+\texttt{-{}-phoenix} & off & Export the model to Phoenix YAML (\texttt{name-phoenix.yaml}), see Section~\ref{sec:phoenix}. Implies \texttt{-{}-no-code}. \\
+\texttt{-{}-no-code} & off & Validate the model and write only the requested exports (e.g.\ \texttt{-{}-dot}, \texttt{-{}-png}), no source code. \\
 \bottomrule
 \end{longtable}
 
@@ -191,8 +197,70 @@ C & \texttt{name.h}, \texttt{name.c} & Header with struct/function declarations 
 Python & \texttt{name.py} & Complete Python implementation (single file). Import with \texttt{from name import StateMachine}. \\
 TypeScript & \texttt{name.ts} & Complete TypeScript implementation (single file). Import with \texttt{import \{ StateMachine \} from "./name"}. \\
 All & \texttt{name.dot} & Graphviz visualization of the state machine. \\
+--- & \texttt{name-phoenix.yaml} & Phoenix YAML export (only with \texttt{-{}-phoenix}). \\
 \bottomrule
 \end{longtable}
+
+\subsection{Phoenix YAML Export}\label{sec:phoenix}
+With \texttt{-{}-phoenix} the model is written to \texttt{name-phoenix.yaml} in the simple Phoenix format instead of generating source code. It is based on \emph{Export to Phoenix} (\texttt{Ctrl-E}) in the SM-GUI editor, and additionally resolves decisions. The model is still validated first.
+
+The format keeps only the top two levels of the state hierarchy:
+
+\begin{lstlisting}[language=YAML, caption={Phoenix YAML format}]
+Top:                    # top-level state; null if it has no children
+  Child:                # second-level state; null if it has nothing below
+    in:                 # entry code, one trimmed line per item
+      - line 1
+    out:                # exit code, one trimmed line per item
+      - line 1
+    next: Top Other     # a single transition without a guard
+Other:
+  Idle:
+    next:               # guarded or multiple, in priority order
+      'ctx.ready': Top Child
+      always: Other     # a transition without a guard
+\end{lstlisting}
+
+Targets are written as \texttt{Top} or \texttt{Top Child} (space separated). Relative and absolute targets are resolved to this form.
+
+Guards are evaluated by Phoenix as Python expressions, top to bottom; the first one that is true is taken. A transition without a guard is written with the guard \texttt{always}, which Phoenix treats as always true.
+
+\subsubsection*{Decisions}
+Transitions into decisions are flattened into ordinary \texttt{next} entries. Each decision rule becomes one entry whose guard is the transition guard combined with the rule guard using \texttt{and}; nested decisions are followed in the same way. The entries keep the priority order, so the behaviour is the same as in the generated code: if no rule of a decision matches, the next transition of the source state is tried. For example, with this content of the top-level state \texttt{Top}
+\begin{lstlisting}[language=YAML]
+decisions:
+  D:
+    - guard: ctx.mode == 'fast'
+      to: b
+    - to: c
+states:
+  a:
+    transitions:
+      - guard: ctx.go
+        to: "@D"
+      - guard: ctx.stop
+        to: /Other
+\end{lstlisting}
+state \texttt{a} is exported as
+\begin{lstlisting}[language=YAML]
+a:
+  next:
+    (ctx.go) and (ctx.mode == 'fast'): Top b
+    ctx.go: Top c
+    ctx.stop: Other
+\end{lstlisting}
+
+\subsubsection*{Dropped content}
+Everything the format cannot express is dropped. A \texttt{WARNING:} line is printed for each of:
+\begin{itemize}
+  \item AND nodes, and transitions leading to them;
+  \item decision loops, and terminations or fork transitions inside decisions;
+  \item transitions after an unguarded transition (they can never be taken), and transitions repeating an earlier guard;
+  \item states deeper than two levels, and transitions targeting them;
+  \item \texttt{entry}, \texttt{exit}, \texttt{do} code and transitions on top-level states;
+  \item \texttt{do} code on second-level states.
+\end{itemize}
+Transition actions, history, orthogonal flags and machine-level properties (\texttt{context}, \texttt{hooks}, \ldots) are also not exported. Termination transitions (\texttt{to: null}) and fork transitions directly on a state are dropped silently.
 
 \section{SMB File Structure}
 The input file uses YAML syntax with the extension \texttt{.smb}. A complete model has this top-level structure:

@@ -1,0 +1,6 @@
+State "Other/o1/deep" is deeper than 2 levels and was skipped
+Transition from "Top/a" via "D" via "E" to "Other/o1/deep" was skipped (target not in top 2 levels)
+Decision loop from "Top/c" via "Loop" to "@Loop" was skipped
+Termination from "Top/c" via "Loop" was skipped
+Transition from "Top/c" to "Top b" is unreachable (after an unguarded transition) and was skipped
+Transition from "Top/d" to "Top b" has the same guard as an earlier one ("ctx.k") and was skipped

@@ -1,0 +1,3 @@
+AND node "A1" was skipped
+State "Parallel/RegA/Working" is deeper than 2 levels and was skipped
+State "Parallel/RegB/Working" is deeper than 2 levels and was skipped

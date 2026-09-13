@@ -1,0 +1,19 @@
+State "run/c/d" is deeper than 2 levels and was skipped
+State "run/c/e" is deeper than 2 levels and was skipped
+State "run/c/e/f" is deeper than 2 levels and was skipped
+State "run/d/a" is deeper than 2 levels and was skipped
+State "run/d/b" is deeper than 2 levels and was skipped
+State "run/g/a" is deeper than 2 levels and was skipped
+State "run/g/a/a" is deeper than 2 levels and was skipped
+State "run/g/a/b" is deeper than 2 levels and was skipped
+State "run/g/b" is deeper than 2 levels and was skipped
+State "run/g/b/a" is deeper than 2 levels and was skipped
+State "run/g/b/b" is deeper than 2 levels and was skipped
+State "run/g/b/c" is deeper than 2 levels and was skipped
+State "run/h/a" is deeper than 2 levels and was skipped
+State "run/h/b" is deeper than 2 levels and was skipped
+State "run/h/c" is deeper than 2 levels and was skipped
+Top-level state "error" has entry code that was ignored
+Top-level state "run" has transitions that were ignored
+Transition from "run/a" to "run/c/d" was skipped (target not in top 2 levels)
+Transition from "run/a" to "run/g/a/b" was skipped (target not in top 2 levels)

@@ -1,0 +1,15 @@
+run:
+  a:
+    next:
+      ctx.counter == 1: run b
+      ctx.counter == 3: run c
+      ctx.counter == 11: run d
+      ctx.counter == 16: run g
+  b:
+    next:
+      ctx.counter == 2: run a
+  c: null
+  d: null
+  g: null
+  h: null
+error: null

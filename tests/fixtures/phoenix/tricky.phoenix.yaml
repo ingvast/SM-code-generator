@@ -1,0 +1,20 @@
+A:
+  a1:
+    in:
+      - 'print("hi: there")'
+      - 'x = ''y'' # comment'
+      - '- dash'
+    out:
+      - 'yes'
+    next:
+      'ctx.s == ''on'' and x: 1': B
+      'true': A a2
+      always: A a2
+  a2:
+    next: B b1
+  weird name:
+    in:
+      - 'null'
+B:
+  b1: null
+C: null

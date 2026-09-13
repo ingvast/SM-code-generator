@@ -1,0 +1,18 @@
+Top:
+  a:
+    next:
+      (ctx.go) and (ctx.mode == 'fast'): Top b
+      (ctx.go) and (ctx.a or ctx.b) and (ctx.n == 1): Other
+      ctx.go: Top c
+      ctx.stop: Other
+  b:
+    next:
+      ctx.x > 0: Other o1
+      always: Top c
+  c:
+    next: Top a
+  d:
+    next:
+      ctx.k: Top a
+Other:
+  o1: null

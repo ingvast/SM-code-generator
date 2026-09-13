@@ -32,6 +32,12 @@ uv run python sm_compiler.py model.smb --png
 # Both DOT and PNG
 uv run python sm_compiler.py model.smb --dot --png
 
+# Export to Phoenix YAML (same as SM-gui Ctrl-E) -> <output>-phoenix.yaml (implies --no-code)
+uv run python sm_compiler.py model.smb --phoenix
+
+# Skip source code generation (e.g. only --dot/--png)
+uv run python sm_compiler.py model.smb --png --no-code
+
 # Build distributable package
 uv build
 # Install from wheel (makes `sm-compiler` available in PATH)
@@ -62,6 +68,7 @@ codegen/
   c_lang.py             # C code generator (extends BaseGenerator, templates + assemble_output)
   python_lang.py        # Python code generator (extends BaseGenerator, templates + assemble_output)
   typescript_lang.py    # TypeScript code generator (extends BaseGenerator, templates + assemble_output)
+  phoenix_export.py     # --phoenix: simple two-level Phoenix YAML export (port of SM-gui's Ctrl-E)
 ```
 
 ### Pipeline
@@ -175,6 +182,26 @@ The TypeScript generator produces a single `.ts` file containing a `Context` cla
 - Guards use TypeScript syntax: `ctx.counter === 5`, `ctx.flag || ctx.other`
 - Run with `npx tsx statemachine.ts` or import as a module
 - Exports `StateMachine` and `Context` classes
+
+## Phoenix YAML Export
+
+`--phoenix` (implies `--no-code`) writes `<output>-phoenix.yaml` via `codegen/phoenix_export.py`, a port of SM-gui's
+`convertToPhoenixYaml` (`../SM-gui/src/yamlConverter.ts`, Ctrl-E). It runs on a deep copy of the
+model taken before decision collection mutates it. Only the top two state levels are kept:
+children get `in`/`out` (entry/exit split into trimmed lines) and `next` (target `"Top"` or
+`"Top Child"`, a `{guard: target}` map when guarded or multiple, `always` for an unguarded one).
+Phoenix evaluates guards as **Python, in order**. Deviations from the GUI export:
+- Transitions into **decisions are flattened**: each rule becomes its own `next` entry with guard
+  `(G) and (g1) and ...`, in priority order, recursing into nested decisions (targets resolved
+  from the decision's scope; legacy `< 0.6.0` global names supported). This matches the generated
+  code, where a decision with no matching rule falls through to the source's next transition.
+  Decision loops and terminations/forks inside decisions are skipped with a warning.
+- An unguarded entry in a `next` map gets the guard `always` (Phoenix's always-true guard; the GUI
+  wrote `else`). A single unguarded transition is still written as plain `next: Target`.
+- Entries after an unguarded one are unreachable and dropped (so `always` is always last); a repeated
+  guard keeps the first entry. Both warn. Key order is preserved (no JS integer-key reordering).
+Otherwise output matches the GUI (js-yaml layout, same warnings; AND nodes still skipped).
+`tests/test_phoenix_export.py` checks the expected files in `tests/fixtures/phoenix/`.
 
 ## Improvement Ideas
 

@@ -1,3 +1,4 @@
+import copy
 import yaml
 import sys
 import argparse
@@ -341,6 +342,10 @@ def main():
                         help="Generate Graphviz DOT file")
     parser.add_argument("--png", action="store_true",
                         help="Generate PNG diagram (requires Graphviz 'dot' tool)")
+    parser.add_argument("--phoenix", action="store_true",
+                        help="Export the top two state levels to Phoenix YAML (<output>-phoenix.yaml); implies --no-code")
+    parser.add_argument("--no-code", action="store_true",
+                        help="Skip source code generation (e.g. only --dot/--png/--phoenix)")
     args = parser.parse_args()
 
     if args.version:
@@ -389,6 +394,7 @@ def main():
         if lang not in SUPPORTED_LANGS:
             sys.exit(f"Error: Unsupported language '{lang}'. Supported: {', '.join(SUPPORTED_LANGS)}")
 
+    raw_data = copy.deepcopy(data)  # pristine model for exports; the pipeline below mutates `data`
     smb_version = data.get('SM-builder-version', '')
     if version_gte(smb_version, PSEUDOSTATE_REF_MIN_VERSION):
         collect_pseudostates_hierarchical(data)
@@ -426,8 +432,20 @@ def main():
                     sys.exit(f"Error: Graphviz 'dot' failed:\n{result.stderr}")
                 print(f" -> {png_path} created.")
 
-        for lang in languages:
-            generate_lang(lang, data, output_base)
+        if args.phoenix:
+            from codegen.phoenix_export import convert_to_phoenix_yaml
+            print("Exporting Phoenix YAML...")
+            phoenix_yaml, warnings = convert_to_phoenix_yaml(raw_data)
+            phoenix_path = output_base + "-phoenix.yaml"
+            with open(phoenix_path, "w") as f:
+                f.write(phoenix_yaml)
+            print(f" -> {phoenix_path} created.")
+            for w in warnings:
+                print(f"WARNING: {w}")
+
+        if not (args.no_code or args.phoenix):
+            for lang in languages:
+                generate_lang(lang, data, output_base)
 
     except Exception as e:
         print(f"\nCRITICAL ERROR during generation: {e}")

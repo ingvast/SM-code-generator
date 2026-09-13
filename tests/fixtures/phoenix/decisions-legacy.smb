@@ -1,0 +1,57 @@
+# Phoenix export: same as decisions.smb but legacy (< 0.6.0) global decision names.
+language: python
+initial: Top
+decisions:
+  Root:                          # root-level decision, targets resolve from root
+    - guard: ctx.x > 0
+      to: /Other/o1
+    - to: Top/c
+states:
+  Top:
+    initial: a
+    decisions:
+      D:                         # guarded, nested and unguarded rules
+        - guard: ctx.mode == 'fast'
+          to: b
+        - guard: ctx.a or ctx.b
+          to: "@E"
+        - to: c
+      E:
+        - guard: ctx.n == 1
+          to: /Other
+        - guard: ctx.n == 2
+          to: /Other/o1/deep    # too deep -> warning
+      Loop:
+        - guard: ctx.again
+          to: "@Loop"           # cycle -> warning
+        - to: null              # termination inside a decision -> warning
+    states:
+      a:
+        transitions:
+          - guard: ctx.go
+            to: "@D"
+          - guard: ctx.stop
+            to: /Other
+      b:
+        transitions:
+          - to: "@Root"         # unguarded source into decision
+      c:
+        transitions:
+          - guard: ctx.p
+            to: "@Loop"
+          - to: a
+          - guard: ctx.never     # after unguarded -> unreachable
+            to: b
+      d:
+        transitions:
+          - guard: ctx.k
+            to: a
+          - guard: ctx.k         # duplicate guard -> skipped
+            to: b
+  Other:
+    initial: o1
+    states:
+      o1:
+        initial: deep
+        states:
+          deep: {}
