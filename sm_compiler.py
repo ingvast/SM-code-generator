@@ -7,7 +7,7 @@ import shutil
 import subprocess
 
 # Import the new parser helper
-from codegen.common import generate_dot, resolve_target_path, flatten_name, parse_fork_target, resolve_state_data, parse_pseudo_ref, resolve_pseudo_ref
+from codegen.common import generate_dot, resolve_target_path, flatten_name, parse_fork_target, resolve_state_data, parse_pseudo_ref, resolve_pseudo_ref, get_lca_index
 from codegen.rust_lang import RustGenerator
 
 PSEUDOSTATE_REF_MIN_VERSION = "0.6.0"
@@ -171,14 +171,157 @@ def get_state_data(root_data, path_parts):
         return root_data
     start_idx = 1 if (path_parts and path_parts[0] == 'root') else 0
     for part in path_parts[start_idx:]:
-        if 'states' not in current or part not in current['states']:
+        if not isinstance(current, dict) or part not in (current.get('states') or {}):
             return None
         current = current['states'][part]
     return current
 
-def validate_model(data):
-    print("Validating model...")
+def _display_path(path):
+    return "/" + "/".join(path[1:])
+
+
+def apply_implicit_initials(data):
+    """Allow composite states to omit `initial:` where it can never be used.
+
+    A composite's initial child is only used when the composite is entered
+    without naming a child ("default entry"). This computes every state that can
+    be default-entered, mirroring BaseGenerator.emit_transition_logic:
+      - the root;
+      - targets of transitions and of decision/AND rules (followed from the
+        source state), including `.`;
+      - regions of an orthogonal state entered on the way to a deeper target
+        (at or below the LCA), and regions a fork does not name;
+      - the initial child of a default-entered OR state, all children of a
+        default-entered orthogonal state, and all children of a default-entered
+        state with history (history restores a child via its own entry).
+
+    Then, for OR composites without `initial`:
+      - a single child becomes the initial;
+      - a composite that is never default-entered gets its first child as a
+        placeholder (the code path is unreachable) and `_initial_unused` so the
+        diagram shows no initial marker;
+      - otherwise an error explaining why an initial is needed is returned.
+    """
     errors = []
+    hierarchical = data.get('_is_hierarchical_refs', False)
+    index = data.get('_pseudostate_index', {})
+
+    def composites(path, sd):
+        if not isinstance(sd, dict):
+            return
+        if isinstance(sd.get('states'), dict) and sd['states']:
+            yield path, sd
+            for name, child in sd['states'].items():
+                yield from composites(path + [name], child)
+
+    for _, sd in composites(['root'], data):
+        if not sd.get('orthogonal') and 'initial' not in sd and len(sd['states']) == 1:
+            sd['initial'] = next(iter(sd['states']))
+
+    reasons = {}   # default-entered state path -> why
+    queue = []
+
+    def mark(path, reason):
+        if tuple(path) not in reasons:
+            reasons[tuple(path)] = reason
+            queue.append(list(path))
+
+    def follow(source, scope, rules, seen):
+        for t in rules or []:
+            if not isinstance(t, dict):
+                continue
+            to = t.get('to')
+            if not isinstance(to, str) or to in ('', 'null'):
+                continue
+            src = _display_path(source)
+            is_ref = ('@' in to) if hierarchical else to.startswith('@')
+            if is_ref:
+                if hierarchical:
+                    try:
+                        _, prules, pscope = resolve_pseudo_ref(to, scope, index)
+                    except (KeyError, ValueError):
+                        continue
+                else:
+                    prules = data.get('decisions', {}).get(to[1:])
+                    pscope = data.get('_decision_scopes', {}).get(to[1:], scope)
+                    if prules is None:
+                        continue
+                if tuple(pscope) not in seen:
+                    follow(source, pscope, prules, seen | {tuple(pscope)})
+                continue
+
+            base, forks = parse_fork_target(to)
+            target = resolve_target_path(scope, base)
+            if forks:
+                tdata = get_state_data(data, target)
+                if not isinstance(tdata, dict) or not tdata.get('states'):
+                    continue
+                named = set()
+                for fork in forks:
+                    parts = fork.split('/')
+                    named.add(parts[0])
+                    mark(target + parts, f"the transition from '{src}' forks into it")
+                for child in tdata['states']:
+                    if child not in named:
+                        mark(target + [child],
+                             f"the fork transition from '{src}' does not name this region")
+                continue
+
+            mark(target, f"the transition from '{src}' targets it")
+            for i in range(get_lca_index(source, target), len(target) - 1):
+                anc = target[:i + 1]
+                adata = get_state_data(data, anc)
+                if isinstance(adata, dict) and adata.get('orthogonal'):
+                    for child in adata.get('states') or {}:
+                        if child != target[i + 1]:
+                            mark(anc + [child], f"the transition from '{src}' enters its "
+                                                f"orthogonal parent '{_display_path(anc)}'")
+
+    def walk(path, sd):
+        if not isinstance(sd, dict):
+            return
+        follow(path, path, sd.get('transitions'), frozenset())
+        for name, child in (sd.get('states') or {}).items():
+            walk(path + [name], child)
+
+    mark(['root'], "it is the root")
+    walk(['root'], data)
+
+    while queue:
+        path = queue.pop()
+        sd = get_state_data(data, path)
+        if not isinstance(sd, dict) or not sd.get('states'):
+            continue
+        children = sd['states']
+        disp = _display_path(path)
+        if sd.get('orthogonal'):
+            for child in children:
+                mark(path + [child], f"its orthogonal parent '{disp}' is entered")
+            continue
+        init = sd.get('initial')
+        if init is None:
+            errors.append(
+                f"State '{disp}' has several children but no 'initial'. It needs one "
+                f"because {reasons[tuple(path)]}.")
+        elif init in children:
+            mark(path + [init], f"it is the initial state of '{disp}'")
+        if sd.get('history'):
+            for child in children:
+                mark(path + [child], f"its parent '{disp}' has history")
+
+    for path, sd in composites(['root'], data):
+        if not sd.get('orthogonal') and 'initial' not in sd and tuple(path) not in reasons:
+            sd['initial'] = next(iter(sd['states']))
+            sd['_initial_unused'] = True
+
+    return errors
+
+
+def validate_model(data, require_initial=True):
+    """Validate the model. With require_initial=False (exports that have no
+    notion of initial states, e.g. Phoenix) missing initials are not checked."""
+    print("Validating model...")
+    errors = apply_implicit_initials(data) if require_initial else []
     is_hierarchical = data.get('_is_hierarchical_refs', False)
     pseudostate_index = data.get('_pseudostate_index', {})
     # Maps sanitized identifier -> first display path that produced it, so two
@@ -201,10 +344,8 @@ def validate_model(data):
             seen_ids[flat_id] = display_name
 
         if 'states' in state_data:
-            # CHANGED: Check 'orthogonal' instead of 'parallel'
-            if 'initial' not in state_data and not state_data.get('orthogonal', False):
-                errors.append(f"State '{display_name}' is composite but missing 'initial' property.")
-            elif 'initial' in state_data:
+            # Missing initials are handled by apply_implicit_initials()
+            if 'initial' in state_data and name_path != ['root']:
                 init = state_data['initial']
                 if init not in state_data['states']:
                     errors.append(f"State '{display_name}' defines initial='{init}', but that child does not exist.")
@@ -260,11 +401,8 @@ def validate_model(data):
             for child_name, child_data in state_data['states'].items():
                 check_state(name_path + [child_name], child_data)
 
-    if 'initial' not in data:
-        errors.append("Root model missing 'initial' state.")
-    else:
-        if data['initial'] not in data['states']:
-             errors.append(f"Root initial state '{data['initial']}' does not exist.")
+    if 'initial' in data and data['initial'] not in (data.get('states') or {}):
+        errors.append(f"Root initial state '{data['initial']}' does not exist.")
     
     check_state(['root'], data)
 
@@ -401,7 +539,7 @@ def main():
         collect_and_inputs(data)
     else:
         collect_decisions(data)
-    validate_model(data)
+    validate_model(data, require_initial=not args.phoenix)
 
     decisions = data.get('decisions', {})
 

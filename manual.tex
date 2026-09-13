@@ -202,7 +202,7 @@ All & \texttt{name.dot} & Graphviz visualization of the state machine. \\
 \end{longtable}
 
 \subsection{Phoenix YAML Export}\label{sec:phoenix}
-With \texttt{-{}-phoenix} the model is written to \texttt{name-phoenix.yaml} in the simple Phoenix format instead of generating source code. It is based on \emph{Export to Phoenix} (\texttt{Ctrl-E}) in the SM-GUI editor, and additionally resolves decisions. The model is still validated first.
+With \texttt{-{}-phoenix} the model is written to \texttt{name-phoenix.yaml} in the simple Phoenix format instead of generating source code. It is based on \emph{Export to Phoenix} (\texttt{Ctrl-E}) in the SM-GUI editor, and additionally resolves decisions. The model is still validated first, but \texttt{initial} states are not required, since Phoenix has no initial states.
 
 The format keeps only the top two levels of the state hierarchy:
 
@@ -295,6 +295,27 @@ states:
   first_state:
     # ... state definition ...
 \end{lstlisting}
+
+\subsection{Initial States}\label{sec:initial}
+The \texttt{initial} key of a composite state (and of the root) names the child that is entered when the composite is entered \emph{without naming a child}. It can be left out when it is never needed:
+\begin{itemize}
+  \item the composite has exactly one child, which is then the initial state; or
+  \item the composite is never entered without naming a child, e.g.\ all transitions into it target one of its children (\texttt{to: work/busy}).
+\end{itemize}
+
+An \texttt{initial} is still required on a composite with several children when any of these can happen:
+\begin{itemize}
+  \item it is the root, or the initial state of a parent that is entered this way;
+  \item a transition, decision rule or AND node rule targets the composite itself (including a self-transition \texttt{.});
+  \item it is a region of an orthogonal state that is entered, either directly or on the way to a state in another region, or by a fork transition that does not name this region;
+  \item its parent has \texttt{history: true} and is entered this way (history resumes a child by entering it, which may use the child's initial state).
+\end{itemize}
+Orthogonal states never need \texttt{initial}, since all their regions are entered. If an \texttt{initial} is missing where it is needed, validation reports the state and the reason, for example:
+\begin{lstlisting}[language=Bash]
+- State '/c' has several children but no 'initial'. It needs one because
+  the transition from '/a' targets it.
+\end{lstlisting}
+In the Graphviz diagram, composites without \texttt{initial} have no initial marker. The Phoenix export (\texttt{-{}-phoenix}) never requires \texttt{initial}.
 
 \subsection{Language-Specific Syntax}
 Since \texttt{includes}, \texttt{context}, \texttt{context\_init}, guards, and actions contain raw target-language code, they must use the syntax of the selected output language:

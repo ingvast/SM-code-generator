@@ -1,0 +1,57 @@
+language: python
+
+# Composite states may omit `initial:` when it is obvious:
+#   - `work` is never entered without naming a child (only /work/busy is targeted)
+#   - `single` has exactly one child, so that child is the initial
+#   - `par/left` is only entered via /par/left/x; the other region `right`
+#     is default-entered and therefore keeps its `initial`
+# The root has a single child, so it needs no `initial` either.
+
+context: |
+    counter: int
+
+context_init: |
+    ctx.counter = 0
+
+states:
+  top:
+    initial: idle
+    states:
+      idle:
+        transitions:
+          - guard: ctx.counter == 1
+            to: ../work/busy
+      work:
+        states:
+          busy:
+            transitions:
+              - guard: ctx.counter == 2
+                to: done
+          done:
+            transitions:
+              - guard: ctx.counter == 3
+                to: ../../single
+      single:
+        states:
+          only:
+            transitions:
+              - guard: ctx.counter == 4
+                to: /top/par/left/x
+      par:
+        orthogonal: true
+        states:
+          left:
+            states:
+              x:
+                transitions:
+                  - guard: ctx.counter == 5
+                    to: y
+              y:
+                transitions:
+                  - guard: ctx.counter == 6
+                    to: null
+          right:
+            initial: r1
+            states:
+              r1: {}
+              r2: {}

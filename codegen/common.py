@@ -206,12 +206,17 @@ def generate_dot_recursive(name_path, data, node_lines, edge_lines, composite_id
              if data.get('history', False):
                  node_lines.append(f"{indent}    {my_id}_hist [shape=circle, label=\"H\", width=0.3];")
              
-             init_child_path = name_path + [data['initial']]
-             init_child_id = get_graph_id(init_child_path)
-             tgt = f"{init_child_id}_start" if init_child_id in composite_ids else init_child_id
-             lhead = f"lhead=cluster_{init_child_id}" if init_child_id in composite_ids else ""
-             node_lines.append(f"{indent}    {my_id}_start [shape=point, width=0.15];")
-             node_lines.append(f"{indent}    {my_id}_start -> {tgt} [{lhead}];")
+             # No initial marker when the initial is omitted (never default-entered, or
+             # --phoenix). The point node stays, invisible, as an anchor for edges.
+             has_initial = data.get('initial') is not None and not data.get('_initial_unused')
+             invis = "" if has_initial else ", style=invis"
+             node_lines.append(f"{indent}    {my_id}_start [shape=point, width=0.15{invis}];")
+             if has_initial:
+                 init_child_path = name_path + [data['initial']]
+                 init_child_id = get_graph_id(init_child_path)
+                 tgt = f"{init_child_id}_start" if init_child_id in composite_ids else init_child_id
+                 lhead = f"lhead=cluster_{init_child_id}" if init_child_id in composite_ids else ""
+                 node_lines.append(f"{indent}    {my_id}_start -> {tgt} [{lhead}];")
 
         for child_name, child_data in data['states'].items():
             generate_dot_recursive(name_path + [child_name], child_data, node_lines, edge_lines, composite_ids, decisions, pseudostate_index)

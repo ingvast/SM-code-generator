@@ -103,7 +103,7 @@ State machine uses **function pointers** (Rust: `Option<StateFn>`, C: `StateFunc
 
 | Keyword | Scope | Description |
 |---------|-------|-------------|
-| `initial` | root/composite | Name of default child state |
+| `initial` | root/composite | Name of default child state (optional where never used, see below) |
 | `states` | root/composite | Child state definitions |
 | `transitions` | any state | List of `{guard, action, to}` |
 | `guard` | transition | Boolean condition (target language expression) |
@@ -117,6 +117,19 @@ State machine uses **function pointers** (Rust: `Option<StateFn>`, C: `StateFunc
 | `context` | root | User-defined fields for the Context struct |
 | `context_init` | root | Initialization code for context fields |
 | `includes` | root | Code placed before the Context struct (imports, helpers) |
+
+### Optional `initial`
+
+`apply_implicit_initials()` (in `sm_compiler.py`, run from `validate_model`) relaxes the `initial`
+requirement. A composite's initial is only used on **default entry** (entered without naming a
+child). It computes every default-enterable state, mirroring `emit_transition_logic`: root;
+transition/decision/AND-rule targets (followed from the source state, incl. `.`); regions of an
+orthogonal ancestor entered at/below the LCA; regions a fork doesn't name; and the closure through
+`initial` children, all regions of orthogonal states, and all children of `history` states. Then, for
+non-orthogonal composites without `initial`: one child -> it becomes the initial; not
+default-enterable -> first child as a placeholder plus `_initial_unused` (DOT hides the marker);
+otherwise an error naming the reason. `--phoenix` calls `validate_model(require_initial=False)`.
+Tests: `tests/test_implicit_initial.py`, fixture `implicit-initial-python`.
 
 ### Path Syntax in `to:` clauses
 

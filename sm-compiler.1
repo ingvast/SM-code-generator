@@ -177,7 +177,8 @@ With \f[CR]\-\-phoenix\f[R] the model is written to
 generating source code.
 It is based on \f[I]Export to Phoenix\f[R] (\f[CR]Ctrl\-E\f[R]) in the
 SM\-GUI editor, and additionally resolves decisions.
-The model is still validated first.
+The model is still validated first, but \f[CR]initial\f[R] states are
+not required, since Phoenix has no initial states.
 .PP
 The format keeps only the top two levels of the state hierarchy:
 .IP
@@ -296,6 +297,49 @@ states\f[B]:\f[R]
   first_state\f[B]:\f[R]
 \f[I]    # ... state definition ...\f[R]
 .EE
+.SS Initial States
+The \f[CR]initial\f[R] key of a composite state (and of the root) names
+the child that is entered when the composite is entered \f[I]without
+naming a child\f[R].
+It can be left out when it is never needed:
+.IP \(bu 2
+the composite has exactly one child, which is then the initial state; or
+.IP \(bu 2
+the composite is never entered without naming a child, e.g.\ all
+transitions into it target one of its children
+(\f[CR]to: work/busy\f[R]).
+.PP
+An \f[CR]initial\f[R] is still required on a composite with several
+children when any of these can happen:
+.IP \(bu 2
+it is the root, or the initial state of a parent that is entered this
+way;
+.IP \(bu 2
+a transition, decision rule or AND node rule targets the composite
+itself (including a self\-transition \f[CR].\f[R]);
+.IP \(bu 2
+it is a region of an orthogonal state that is entered, either directly
+or on the way to a state in another region, or by a fork transition that
+does not name this region;
+.IP \(bu 2
+its parent has \f[CR]history: true\f[R] and is entered this way (history
+resumes a child by entering it, which may use the child\(cqs initial
+state).
+.PP
+Orthogonal states never need \f[CR]initial\f[R], since all their regions
+are entered.
+If an \f[CR]initial\f[R] is missing where it is needed, validation
+reports the state and the reason, for example:
+.IP
+.EX
+\- State \(aq/c\(aq has several children but no \(aqinitial\(aq. It needs one because
+  the transition from \(aq/a\(aq targets it.
+.EE
+.PP
+In the Graphviz diagram, composites without \f[CR]initial\f[R] have no
+initial marker.
+The Phoenix export (\f[CR]\-\-phoenix\f[R]) never requires
+\f[CR]initial\f[R].
 .SS Language\-Specific Syntax
 Since \f[CR]includes\f[R], \f[CR]context\f[R], \f[CR]context_init\f[R],
 guards, and actions contain raw target\-language code, they must use the

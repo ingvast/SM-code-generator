@@ -1,0 +1,9 @@
+--- implicit-initial ---
+00: /top/idle
+01: /top/idle
+02: /top/work/busy
+03: /top/work/done
+04: /top/single/only
+05: /top/par/[left/x,right/r1]
+06: /top/par/[left/y,right/r1]
+07: FINISHED

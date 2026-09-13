@@ -338,3 +338,10 @@ def test_identifier_collision_rejected(tmp_path):
         f"Expected the colliding identifier in the error output:\n{result.stdout}"
     )
 
+
+# Composite states without `initial:` where it can never be used (never entered
+# without naming a child, or a single child).
+@pytest.mark.parametrize("lang", get_languages("implicit-initial-python.smb"))
+def test_implicit_initial_python(lang, tmp_path):
+    actual = run_pipeline("implicit-initial-python.smb", lang, tmp_path)
+    check_output(actual, "implicit-initial-python.smb", lang)
