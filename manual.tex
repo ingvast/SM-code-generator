@@ -500,7 +500,8 @@ All backends generate a \texttt{Context} struct or class (Rust: \texttt{Context}
 \begin{itemize}
     \item \texttt{now}: Logical time (\texttt{f64}/\texttt{double}). You update this before each tick.
     \item \texttt{state\_timers[]}: Per-state entry timestamps (set automatically on entry).
-    \item \texttt{transition\_fired}: Safety flag for orthogonal regions (managed automatically).
+    \item \texttt{transition\_fired}: Set when any transition has fired during the current tick (reset at the start of each tick).
+    \item \texttt{tick\_count}, \texttt{state\_entry\_tick[]}: Tick counter and the tick each state was last entered in, used to keep freshly entered states from running in the same tick (managed automatically; TypeScript: \texttt{tickCount}, \texttt{stateEntryTick}).
     \item \texttt{terminated}: Set when a \texttt{null} transition fires (managed automatically).
     \item Hierarchy pointers: Function pointers tracking the active state at each level (managed automatically).
     \item User fields: Whatever you declare in the \texttt{context:} block.
@@ -696,8 +697,15 @@ When \texttt{parallel\_task} is entered, \textbf{all} child regions are entered 
 
 The state path for orthogonal states uses bracket notation: \texttt{/parallel\_task/[region\_a/idle\_a,region\_b/idle\_b]}.
 
-\subsection{Safety: \texttt{transition\_fired}}
-When a transition fires in one region, the other regions' ticks are skipped for that cycle to prevent inconsistent state. This is handled automatically via the \texttt{transition\_fired} flag.
+\subsection{Multiple Transitions per Tick}
+Regions are ticked one after another, in the order they are declared. A transition that fires inside a region ends that region's tick, but the \textbf{other regions still run}: they execute the \texttt{do:} of their active states and evaluate their own transitions, so several regions can transition in the same tick. Actions of earlier regions are visible to the guards of later regions.
+
+Three rules keep this consistent:
+\begin{itemize}
+    \item If a region's transition \textbf{leaves the orthogonal state} (or terminates the machine), the remaining regions are not ticked.
+    \item A state \textbf{entered during the current tick} (for example by a cross-limb transition from another region, or because the orthogonal state was re-entered) does not run its \texttt{do:} or transitions until the next tick.
+    \item An \textbf{AND join} only counts a source state that was active before the current tick, so the join tick does not depend on region order.
+\end{itemize}
 
 \subsection{Fork Transitions (Drilling Down)}
 You can enter an orthogonal state by targeting its children directly.

@@ -9,9 +9,13 @@ HEADER = """
 // --- User Includes / Context Types ---
 %s
 
+pub const TOTAL_STATES: usize = %d;
+
 pub struct Context {
     pub now: f64,
-    pub state_timers: [f64; %d],
+    pub state_timers: [f64; TOTAL_STATES],
+    pub tick_count: u64,
+    pub state_entry_tick: [u64; TOTAL_STATES],
     pub transition_fired: bool,
     pub terminated: bool,
 
@@ -34,7 +38,9 @@ impl StateMachine {
     pub fn new() -> Self {
         let ctx = Context {
             now: 0.0,
-            state_timers: [0.0; %d],
+            state_timers: [0.0; TOTAL_STATES],
+            tick_count: 0,
+            state_entry_tick: [0; TOTAL_STATES],
             transition_fired: false,
             terminated: false,
 
@@ -58,6 +64,7 @@ impl StateMachine {
 
     pub fn tick(&mut self) {
         self.ctx.transition_fired = false;
+        self.ctx.tick_count = self.ctx.tick_count.wrapping_add(1);
 
         if let Some(do_fn) = self.root {
             do_fn(&mut self.ctx);
@@ -103,6 +110,7 @@ class RustGenerator(BaseGenerator):
     LEAF_TEMPLATE = """
 fn state_{c_name}_start(ctx: &mut Context) {{
     ctx.state_timers[{state_id}] = ctx.now;
+    ctx.state_entry_tick[{state_id}] = ctx.tick_count;
     {preamble}
     {hook_entry}
     {entry}
@@ -121,6 +129,7 @@ fn state_{c_name}_exit(ctx: &mut Context) {{
 }}
 
 fn state_{c_name}_do(ctx: &mut Context) {{
+    {tick_gate}
     {preamble}
     {hook_do}
     {transitions}
@@ -131,6 +140,7 @@ fn state_{c_name}_do(ctx: &mut Context) {{
     COMPOSITE_OR_TEMPLATE = """
 fn state_{c_name}_start(ctx: &mut Context) {{
     ctx.state_timers[{state_id}] = ctx.now;
+    ctx.state_entry_tick[{state_id}] = ctx.tick_count;
     {preamble}
     {hook_entry}
     {entry}
@@ -160,6 +170,7 @@ fn state_{c_name}_exit(ctx: &mut Context) {{
 }}
 
 fn state_{c_name}_do(ctx: &mut Context) {{
+    {tick_gate}
     {preamble}
     {hook_do}
     {transitions}
@@ -175,6 +186,7 @@ fn state_{c_name}_do(ctx: &mut Context) {{
     COMPOSITE_AND_TEMPLATE = """
 fn state_{c_name}_start(ctx: &mut Context) {{
     ctx.state_timers[{state_id}] = ctx.now;
+    ctx.state_entry_tick[{state_id}] = ctx.tick_count;
     {preamble}
     {hook_entry}
     {entry}
@@ -197,12 +209,13 @@ fn state_{c_name}_exit(ctx: &mut Context) {{
 }}
 
 fn state_{c_name}_do(ctx: &mut Context) {{
+    {tick_gate}
     {preamble}
     {hook_do}
     {transitions}
     {do}
 
-    // Safety: Stop if we are exited OR if any transition fired globally
+    // Stop if this orthogonal state was exited (or the machine terminated)
     {safety_check}
 
     {parallel_ticks}
@@ -224,7 +237,6 @@ fn inspect_{c_name}(ctx: &Context, buf: &mut String) {{
             self.state_counter,
             "\n    ".join(self.outputs['context_ptrs']),
             self.data.get('context', ''),
-            self.state_counter,
             "\n            ".join(self.outputs['context_init']),
             user_init,
             "\n    ".join(self.outputs['impls'])

@@ -1,0 +1,86 @@
+language: rust
+
+# Several orthogonal regions must all run in the same tick: a transition in
+# one region stops only that region; later regions still run their do: and
+# evaluate their transitions. States entered during the current tick (by a
+# cross-limb transition or by re-entering P) do not run until the next tick.
+# A region that exits P (or terminates) stops all later regions.
+#
+#  tick 2: A1->A2, B1->B2 and C1->C2 all fire in one tick
+#  tick 3: A2 -> /P/R2/B3 (cross-limb); fresh B3 must not run, B2's own
+#          step==3 transition must not fire
+#  tick 4: B3 -> B1
+#  tick 5: A2 -> /Out; R2 and R3 must not run (B1's step==5 must not fire)
+#  tick 6: Out -> P
+#  tick 7: A1 -> /P (re-enter); fresh B1, C1 must not run (B1's step==7 no)
+#  tick 8: C1 -> C2 is not taken (guard is step==2); all regions run again
+#  tick 9: A1 -> null terminates; R2, R3 must not run
+
+context: |
+    pub step: i32,
+
+context_init: |
+    step: 0,
+
+hooks:
+  do: |
+    println!("{:02}: do {}", ctx.step, state_full_name);
+  transition: |
+    println!("{:02}: {} -> {}", ctx.step, t_src, t_dst);
+
+initial: P
+
+states:
+  P:
+    orthogonal: true
+    states:
+      R1:
+        initial: A1
+        states:
+          A1:
+            transitions:
+              - guard: ctx.step == 2
+                to: A2
+              - guard: ctx.step == 7
+                to: /P                 # exit + re-enter P from inside a region
+              - guard: ctx.step == 9
+                to: null               # terminate from inside a region
+          A2:
+            transitions:
+              - guard: ctx.step == 3
+                to: /P/R2/B3           # cross-limb: replaces R2's state
+              - guard: ctx.step == 5
+                to: /Out               # leaves P entirely
+      R2:
+        initial: B1
+        states:
+          B1:
+            transitions:
+              - guard: ctx.step == 2
+                to: B2
+              - guard: ctx.step == 5
+                to: B2                 # must NOT fire: P already exited
+              - guard: ctx.step == 7
+                to: B2                 # must NOT fire: B1 freshly entered
+          B2:
+            transitions:
+              - guard: ctx.step == 3
+                to: B1                 # must NOT fire: B2 replaced by B3
+          B3:
+            transitions:
+              - to: B1
+      R3:
+        initial: C1
+        states:
+          C1:
+            transitions:
+              - guard: ctx.step == 2
+                to: C2
+          C2:
+            transitions:
+              - guard: ctx.step == 8
+                to: C1
+  Out:
+    transitions:
+      - guard: ctx.step == 6
+        to: P

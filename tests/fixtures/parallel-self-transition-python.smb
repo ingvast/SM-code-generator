@@ -1,0 +1,51 @@
+language: python
+
+# Both regions of P must transition in the same tick; an unguarded
+# self-transition in the first region must not starve the second; a
+# termination fired from the first region must stop the second one.
+#
+#  tick 1: X1 -> X2 and Y1 -> Y2 in the same tick
+#  tick 2: an unguarded self-transition in X must not starve region Y
+#  tick 3: X2 terminates; Y must not run
+
+context: |
+    step: int
+
+context_init: |
+    ctx.step = 0
+
+hooks:
+  do: |
+    print(f"{ctx.step:02d}: do {state_full_name}")
+  transition: |
+    print(f"{ctx.step:02d}: {t_src} -> {t_dst}")
+
+initial: P
+
+states:
+  P:
+    orthogonal: true
+    states:
+      X:
+        initial: X1
+        states:
+          X1:
+            transitions:
+              - guard: ctx.step == 1
+                to: X2
+          X2:
+            transitions:
+              - guard: ctx.step == 3
+                to: null
+              - to: .
+      Y:
+        initial: Y1
+        states:
+          Y1:
+            transitions:
+              - guard: ctx.step == 1
+                to: Y2
+          Y2:
+            transitions:
+              - guard: ctx.step == 3
+                to: Y1

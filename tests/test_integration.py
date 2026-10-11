@@ -345,3 +345,37 @@ def test_identifier_collision_rejected(tmp_path):
 def test_implicit_initial_python(lang, tmp_path):
     actual = run_pipeline("implicit-initial-python.smb", lang, tmp_path)
     check_output(actual, "implicit-initial-python.smb", lang)
+
+
+# Orthogonal regions run independently within one tick: a transition in one
+# region stops only that region, while later regions still run their do: and
+# evaluate their own transitions. States entered during the tick (cross-limb
+# transition, re-entry of the orthogonal state) wait for the next tick, and a
+# region that leaves the orthogonal state or terminates stops later regions.
+@pytest.mark.parametrize("lang", ["python", "rust", "c", "typescript"])
+def test_parallel_multi_transition(lang, tmp_path):
+    smb = f"parallel-multi-transition-{lang}.smb"
+    actual = run_pipeline(smb, lang, tmp_path)
+    check_output(actual, smb, lang)
+
+
+@pytest.mark.parametrize("lang", get_languages("parallel-self-transition-python.smb"))
+def test_parallel_self_transition(lang, tmp_path):
+    actual = run_pipeline("parallel-self-transition-python.smb", lang, tmp_path)
+    check_output(actual, "parallel-self-transition-python.smb", lang)
+
+
+# An AND join ignores a source entered earlier in the same tick by another
+# region; the join fires on the next tick regardless of region order.
+@pytest.mark.parametrize("lang", get_languages("and-fresh-join-python.smb"))
+def test_and_fresh_join(lang, tmp_path):
+    actual = run_pipeline("and-fresh-join-python.smb", lang, tmp_path)
+    check_output(actual, "and-fresh-join-python.smb", lang)
+
+
+# A transition to an ancestor of the source (B2 -> /A from inside A) must exit
+# and re-enter that ancestor (like `.`), not re-enter it without exiting it.
+@pytest.mark.parametrize("lang", get_languages("ancestor-transition-python.smb"))
+def test_ancestor_transition(lang, tmp_path):
+    actual = run_pipeline("ancestor-transition-python.smb", lang, tmp_path)
+    check_output(actual, "ancestor-transition-python.smb", lang)

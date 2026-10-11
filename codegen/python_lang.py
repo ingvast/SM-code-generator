@@ -24,6 +24,7 @@ time = ctx.now - ctx.state_timers[{state_id}]
     LEAF_TEMPLATE = """
 def state_{c_name}_start(ctx):
     ctx.state_timers[{state_id}] = ctx.now
+    ctx.state_entry_tick[{state_id}] = ctx.tick_count
     {preamble}
     {hook_entry}
     {entry}
@@ -39,6 +40,7 @@ def state_{c_name}_exit(ctx):
     {clear_parent}
 
 def state_{c_name}_do(ctx):
+    {tick_gate}
     {preamble}
     {hook_do}
     {transitions}
@@ -48,6 +50,7 @@ def state_{c_name}_do(ctx):
     COMPOSITE_OR_TEMPLATE = """
 def state_{c_name}_start(ctx):
     ctx.state_timers[{state_id}] = ctx.now
+    ctx.state_entry_tick[{state_id}] = ctx.tick_count
     {preamble}
     {hook_entry}
     {entry}
@@ -71,6 +74,7 @@ def state_{c_name}_exit(ctx):
     {clear_parent}
 
 def state_{c_name}_do(ctx):
+    {tick_gate}
     {preamble}
     {hook_do}
     {transitions}
@@ -84,6 +88,7 @@ def state_{c_name}_do(ctx):
     COMPOSITE_AND_TEMPLATE = """
 def state_{c_name}_start(ctx):
     ctx.state_timers[{state_id}] = ctx.now
+    ctx.state_entry_tick[{state_id}] = ctx.tick_count
     {preamble}
     {hook_entry}
     {entry}
@@ -103,12 +108,13 @@ def state_{c_name}_exit(ctx):
     {clear_parent}
 
 def state_{c_name}_do(ctx):
+    {tick_gate}
     {preamble}
     {hook_do}
     {transitions}
     {do}
 
-    # Safety: Stop if we are exited OR if any transition fired globally
+    # Stop if this orthogonal state was exited (or the machine terminated)
     {safety_check}
 
     {parallel_ticks}
@@ -211,9 +217,15 @@ def inspect_{c_name}(ctx, buf):
 
     def fmt_safety_check(self, c_name, has_parent):
         if has_parent:
-            return f"if not ctx.in_state_{c_name}() or ctx.transition_fired: return"
+            return f"if not ctx.in_state_{c_name}() or ctx.terminated: return"
         else:
-            return f"if ctx.transition_fired: return"
+            return f"if ctx.terminated: return"
+
+    def fmt_tick_gate(self, state_id):
+        return f"if ctx.state_entry_tick[{state_id}] == ctx.tick_count: return"
+
+    def fmt_entered_before_tick(self, state_id):
+        return f"(ctx.state_entry_tick[{state_id}] != ctx.tick_count)"
 
     def fmt_guard_expand(self, guard_str):
         return re.sub(r'IN_STATE\(([\w_]+)\)', r'ctx.in_state_\1()', guard_str)
@@ -280,6 +292,8 @@ class Context:
         self.owner = None
         self.now = 0.0
         self.state_timers = [0.0] * TOTAL_STATES
+        self.tick_count = 0
+        self.state_entry_tick = [0] * TOTAL_STATES
         self.transition_fired = False
         self.terminated = False
 
@@ -308,6 +322,7 @@ class StateMachine:
 
     def tick(self):
         self.ctx.transition_fired = False
+        self.ctx.tick_count += 1
         if self.root is not None:
             self.root(self.ctx)
             if self.ctx.terminated:

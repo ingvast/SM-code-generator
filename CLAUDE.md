@@ -145,10 +145,33 @@ Tests: `tests/test_implicit_initial.py`, fixture `implicit-initial-python`.
 ### Transition Execution Order
 
 1. Evaluate guard condition
-2. Set `transition_fired = true`
+2. Set `transition_fired = true` (informational: "a transition fired this tick")
 3. Execute `action` code (if any)
 4. Execute exit sequence (leaf to LCA, bottom-up)
 5. Execute entry sequence (LCA to target, top-down)
+
+When the target is the source itself (`.`) or one of its **ancestors** (e.g. `B2 -> /A` from
+inside `A`), `get_lca_index()` puts the LCA at the target's *parent*, so the target is exited and
+re-entered (in an orthogonal target this exits every region). Termination relies on this too: its
+exit sequence to `['root']` includes `state_root_exit`. Fixture: `ancestor-transition-python`.
+
+### Orthogonal Regions: Multiple Transitions per Tick
+
+An orthogonal state's `_do` ticks its regions in declaration order. A transition inside a region
+`return`s out of that region only; the sibling regions still run their `do:` and transitions, so
+several transitions can fire in one tick. `transition_fired` is still set but no longer gates
+anything. The rules (`base_lang.py`):
+- **Between regions** `fmt_safety_check` emits `if !in_state_P() || terminated return` — stop only
+  when an earlier region left P (region `_do`s are called directly, not via pointer).
+- **Fresh states wait**: every `_start` stamps `state_entry_tick[id] = tick_count` (`tick()`
+  increments `tick_count` first). Each `_do` of a state with an orthogonal proper ancestor
+  (`gated_states`, built in `_index_state_ids()`) starts with `fmt_tick_gate(id)`: return if entered
+  this tick (cross-limb hot-swap, re-entry of P). Other states never need it: OR `_do` ticks its
+  child last and transitions `return`.
+- **AND joins** AND `fmt_entered_before_tick(id)` into each other source's `IN_STATE`, so a source
+  entered earlier in the tick does not count (join timing independent of region order).
+Fixtures: `parallel-multi-transition-{python,rust,c,typescript}`, `parallel-self-transition-python`,
+`and-fresh-join-python`.
 
 ### The `time` Variable
 
@@ -227,11 +250,10 @@ Otherwise output matches the GUI (js-yaml layout, same warnings; AND nodes still
 ### Medium Priority
 1. **Input file format**: The tool accepts both `.yaml` and `.smb` files but treats them identically. Consider formally defining `.smb` as the canonical extension.
 2. **Error messages**: Validation errors could include line numbers from the YAML source for better debugging.
-3. **Self-transition (`.`) handling**: `resolve_target_path` returns `current_path` for `.`, which causes LCA to be at the state itself. Verify this produces correct exit+re-enter behavior in all cases.
 
 ### Low Priority
-4. **`get_state_data` duplication**: Both `sm-compiler.py` and `common.py` have `get_state_data`/`resolve_state_data` doing the same thing.
-5. **Makefile** is configured for C workflow; the Rust workflow uses `compileRun` script instead.
+3. **`get_state_data` duplication**: Both `sm-compiler.py` and `common.py` have `get_state_data`/`resolve_state_data` doing the same thing.
+4. **Makefile** is configured for C workflow; the Rust workflow uses `compileRun` script instead.
 
 ## Test Suite
 

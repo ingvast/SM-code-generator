@@ -767,8 +767,13 @@ You update this before each tick.
 \f[CR]state_timers[]\f[R]: Per\-state entry timestamps (set
 automatically on entry).
 .IP \(bu 2
-\f[CR]transition_fired\f[R]: Safety flag for orthogonal regions (managed
-automatically).
+\f[CR]transition_fired\f[R]: Set when any transition has fired during
+the current tick (reset at the start of each tick).
+.IP \(bu 2
+\f[CR]tick_count\f[R], \f[CR]state_entry_tick[]\f[R]: Tick counter and
+the tick each state was last entered in, used to keep freshly entered
+states from running in the same tick (managed automatically; TypeScript:
+\f[CR]tickCount\f[R], \f[CR]stateEntryTick\f[R]).
 .IP \(bu 2
 \f[CR]terminated\f[R]: Set when a \f[CR]null\f[R] transition fires
 (managed automatically).
@@ -1091,10 +1096,24 @@ When exiting, all regions are exited.
 .PP
 The state path for orthogonal states uses bracket notation:
 \f[CR]/parallel_task/[region_a/idle_a,region_b/idle_b]\f[R].
-.SS Safety: \f[CR]transition_fired\f[R]
-When a transition fires in one region, the other regions\(cq ticks are
-skipped for that cycle to prevent inconsistent state.
-This is handled automatically via the \f[CR]transition_fired\f[R] flag.
+.SS Multiple Transitions per Tick
+Regions are ticked one after another, in the order they are declared.
+A transition that fires inside a region ends that region\(cqs tick, but
+the \f[B]other regions still run\f[R]: they execute the \f[CR]do:\f[R]
+of their active states and evaluate their own transitions, so several
+regions can transition in the same tick.
+Actions of earlier regions are visible to the guards of later regions.
+.IP \(bu 2
+If a region\(cqs transition \f[B]leaves the orthogonal state\f[R] (or
+terminates the machine), the remaining regions are not ticked.
+.IP \(bu 2
+A state \f[B]entered during the current tick\f[R] (for example by a
+cross\-limb transition from another region, or because the orthogonal
+state was re\-entered) does not run its \f[CR]do:\f[R] or transitions
+until the next tick.
+.IP \(bu 2
+An \f[B]AND join\f[R] only counts a source state that was active before
+the current tick, so the join tick does not depend on region order.
 .SS Fork Transitions (Drilling Down)
 You can enter an orthogonal state by targeting its children directly.
 .IP "1." 3

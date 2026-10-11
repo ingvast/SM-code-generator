@@ -84,11 +84,23 @@ class BaseGenerator(ABC):
         return f"ctx.{ptr}.map(|f| f as usize) == Some({fn_name} as usize)"
 
     def fmt_safety_check(self, c_name, has_parent):
-        """Format a safety check for orthogonal regions. Default: Rust syntax."""
+        """Gate between orthogonal region ticks: stop once this orthogonal state
+        was exited by an earlier region (or the machine terminated). A transition
+        inside one region does NOT stop the sibling regions. Default: Rust syntax."""
         if has_parent:
-            return f"if !ctx.in_state_{c_name}() || ctx.transition_fired {{ return; }}"
+            return f"if !ctx.in_state_{c_name}() || ctx.terminated {{ return; }}"
         else:
-            return f"if ctx.transition_fired {{ return; }}"
+            return f"if ctx.terminated {{ return; }}"
+
+    def fmt_tick_gate(self, state_id):
+        """First statement of a `_do` below an orthogonal state: a state entered
+        during the current tick (by a sibling region's transition) does not run
+        until the next tick. Default: Rust syntax."""
+        return f"if ctx.state_entry_tick[{state_id}] == ctx.tick_count {{ return; }}"
+
+    def fmt_entered_before_tick(self, state_id):
+        """True if the state was entered before the current tick. Default: Rust syntax."""
+        return f"(ctx.state_entry_tick[{state_id}] != ctx.tick_count)"
 
     def fmt_guard_expand(self, guard_str):
         """Expand IN_STATE(...) macros in guard conditions. Default: Rust syntax."""
@@ -161,17 +173,26 @@ class BaseGenerator(ABC):
         """Map each state path (tuple) to the state id baked into its FUNC_PREAMBLE.
 
         Replays the exact DFS pre-order used by recurse() so the ids line up with
-        the state_timers[...] indices. Used to rebase cross-source `time` guards."""
+        the state_timers[...] indices. Used to rebase cross-source `time` guards.
+
+        Also collects `gated_states`: ids of states with an orthogonal proper
+        ancestor. Only those can be ticked in the same tick they were entered
+        (a sibling region's transition entered them), so only their `_do` gets
+        the tick gate. Root is never orthogonal in the generated code."""
         self.state_ids = {}
+        self.gated_states = set()
         counter = 0
-        def walk(name_path, data):
+        def walk(name_path, data, under_ortho):
             nonlocal counter
+            if under_ortho:
+                self.gated_states.add(counter)
             self.state_ids[tuple(name_path)] = counter
             counter += 1
+            child_under = under_ortho or (len(name_path) > 1 and data.get('orthogonal', False))
             for child_name, child_data in (data.get('states') or {}).items():
                 if isinstance(child_data, dict):
-                    walk(name_path + [child_name], child_data)
-        walk(['root'], self.data)
+                    walk(name_path + [child_name], child_data, child_under)
+        walk(['root'], self.data, False)
 
     def generate(self):
         """Run the full generation pipeline: recurse, inspect, assemble."""
@@ -266,9 +287,9 @@ class BaseGenerator(ABC):
              code += formatted_action + "\n"
 
         if is_termination:
+            # Exit sequence up to and including root (root is an ancestor target).
             exit_funcs = get_exit_sequence(name_path, ['root'], self._fmt_func)
             code += "".join([f"{indent}    {fn}(ctx){self.STMT_END}\n" for fn in exit_funcs])
-            code += f"{indent}    state_root_exit(ctx){self.STMT_END}\n"
             code += f"{indent}    {self.fmt_set_flag('terminated', self.TRUE_LIT)}\n"
             code += f"{indent}    return{self.STMT_END}\n"
 
@@ -337,7 +358,10 @@ class BaseGenerator(ABC):
                                     parts.append(self.fmt_not(rebase(pg)))
                             edge_terms.append(self.BOOL_AND.join(parts) if parts else None)
 
-                        cond = f"IN_STATE({s_c_name})"
+                        # A source entered earlier in this same tick (by another
+                        # region) has not had its turn yet; it joins next tick.
+                        cond = self.BOOL_AND.join([f"IN_STATE({s_c_name})",
+                                                   self.fmt_entered_before_tick(src_id)])
                         if any(t is None for t in edge_terms):
                             # An unguarded edge makes the source ready whenever it is
                             # active; the OR collapses to just the IN_STATE check.
@@ -509,6 +533,7 @@ class BaseGenerator(ABC):
 
             disp_name = "/" + "/".join(name_path[1:]) if len(name_path) > 1 else "/"
             preamble = self.format_template(self.FUNC_PREAMBLE, short_name=name_path[-1], display_name=disp_name, state_id=my_id_num)
+            tick_gate = self.fmt_tick_gate(my_id_num) if my_id_num in self.gated_states else ""
 
             parent_run_ptr = parent_ptrs[0] if parent_ptrs else None
             parent_exit_ptr = parent_ptrs[1] if parent_ptrs else None
@@ -570,7 +595,7 @@ class BaseGenerator(ABC):
                         self.recurse(child_path, child_data, (region_ptr, region_exit_ptr, None))
 
                     func_body = self.format_template(self.COMPOSITE_AND_TEMPLATE,
-                        c_name=my_c_name, state_id=my_id_num, preamble=preamble,
+                        c_name=my_c_name, state_id=my_id_num, preamble=preamble, tick_gate=tick_gate,
                         hook_entry=h_entry, hook_do=h_do, hook_exit=h_exit,
                         entry=data.get('entry', ''), exit=data.get('exit', ''), do=data.get('do', ''),
                         transitions=trans_code,
@@ -596,7 +621,7 @@ class BaseGenerator(ABC):
                     hist_bool = self.TRUE_LIT if data.get('history', False) else self.FALSE_LIT
 
                     func_body = self.format_template(self.COMPOSITE_OR_TEMPLATE,
-                        c_name=my_c_name, state_id=my_id_num, preamble=preamble,
+                        c_name=my_c_name, state_id=my_id_num, preamble=preamble, tick_gate=tick_gate,
                         hook_entry=h_entry, hook_do=h_do, hook_exit=h_exit,
                         entry=data.get('entry', ''), exit=data.get('exit', ''), do=data.get('do', ''),
                         transitions=trans_code, history=hist_bool,
@@ -612,7 +637,7 @@ class BaseGenerator(ABC):
                         self.recurse(name_path + [child_name], child_data, (my_ptr, my_exit_ptr, child_hist_ptr))
             else:
                 func_body = self.format_template(self.LEAF_TEMPLATE,
-                    c_name=my_c_name, state_id=my_id_num, preamble=preamble,
+                    c_name=my_c_name, state_id=my_id_num, preamble=preamble, tick_gate=tick_gate,
                     hook_entry=h_entry, hook_do=h_do, hook_exit=h_exit,
                     entry=data.get('entry', ''), exit=data.get('exit', ''), do=data.get('do', ''),
                     transitions=trans_code,

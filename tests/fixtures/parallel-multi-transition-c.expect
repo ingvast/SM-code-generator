@@ -1,0 +1,73 @@
+00: /P/[R1/A1,R2/B1,R3/C1]
+01: do /
+01: do /P
+01: do /P/R1
+01: do /P/R1/A1
+01: do /P/R2
+01: do /P/R2/B1
+01: do /P/R3
+01: do /P/R3/C1
+01: /P/[R1/A1,R2/B1,R3/C1]
+02: do /
+02: do /P
+02: do /P/R1
+02: do /P/R1/A1
+02: /P/R1/A1 -> /P/R1/A2
+02: do /P/R2
+02: do /P/R2/B1
+02: /P/R2/B1 -> /P/R2/B2
+02: do /P/R3
+02: do /P/R3/C1
+02: /P/R3/C1 -> /P/R3/C2
+02: /P/[R1/A2,R2/B2,R3/C2]
+03: do /
+03: do /P
+03: do /P/R1
+03: do /P/R1/A2
+03: /P/R1/A2 -> /P/R2/B3
+03: do /P/R2
+03: do /P/R3
+03: do /P/R3/C2
+03: /P/[R1/A2,R2/B3,R3/C2]
+04: do /
+04: do /P
+04: do /P/R1
+04: do /P/R1/A2
+04: do /P/R2
+04: do /P/R2/B3
+04: /P/R2/B3 -> /P/R2/B1
+04: do /P/R3
+04: do /P/R3/C2
+04: /P/[R1/A2,R2/B1,R3/C2]
+05: do /
+05: do /P
+05: do /P/R1
+05: do /P/R1/A2
+05: /P/R1/A2 -> /Out
+05: /Out
+06: do /
+06: do /Out
+06: /Out -> /P
+06: /P/[R1/A1,R2/B1,R3/C1]
+07: do /
+07: do /P
+07: do /P/R1
+07: do /P/R1/A1
+07: /P/R1/A1 -> /P
+07: /P/[R1/A1,R2/B1,R3/C1]
+08: do /
+08: do /P
+08: do /P/R1
+08: do /P/R1/A1
+08: do /P/R2
+08: do /P/R2/B1
+08: do /P/R3
+08: do /P/R3/C1
+08: /P/[R1/A1,R2/B1,R3/C1]
+09: do /
+09: do /P
+09: do /P/R1
+09: do /P/R1/A1
+09: /P/R1/A1 -> Termination
+09: FINISHED
+done

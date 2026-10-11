@@ -1,0 +1,29 @@
+language: python
+
+# A transition from inside a composite to that composite itself
+# (B2 -> /A, target is an ancestor of the source) must leave A and enter it
+# again: exit B2, exit A, entry A, entry B1 -- like the `.` self-transition.
+context: |
+    step: int
+context_init: |
+    ctx.step = 0
+hooks:
+  entry: |
+    print(f"{ctx.step:02d}: entry {state_full_name}")
+  exit: |
+    print(f"{ctx.step:02d}: exit {state_full_name}")
+  transition: |
+    print(f"{ctx.step:02d}: {t_src} -> {t_dst}")
+initial: A
+states:
+  A:
+    initial: B1
+    states:
+      B1:
+        transitions:
+          - guard: ctx.step == 1
+            to: B2
+      B2:
+        transitions:
+          - guard: ctx.step == 2
+            to: /A

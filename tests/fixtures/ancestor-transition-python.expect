@@ -1,0 +1,16 @@
+00: entry /
+00: entry /A
+00: entry /A/B1
+00: /A/B1
+01: /A/B1 -> /A/B2
+01: exit /A/B1
+01: entry /A/B2
+01: /A/B2
+02: /A/B2 -> /A
+02: exit /A/B2
+02: exit /A
+02: entry /A
+02: entry /A/B1
+02: /A/B1
+03: /A/B1
+done

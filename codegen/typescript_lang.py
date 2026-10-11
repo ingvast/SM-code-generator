@@ -21,6 +21,7 @@ let state_name = "{short_name}";
     LEAF_TEMPLATE = """
 function state_{c_name}_start(ctx: Context): void {{
     ctx.stateTimers[{state_id}] = ctx.now;
+    ctx.stateEntryTick[{state_id}] = ctx.tickCount;
     {preamble}
     {hook_entry}
     {entry}
@@ -39,6 +40,7 @@ function state_{c_name}_exit(ctx: Context): void {{
 }}
 
 function state_{c_name}_do(ctx: Context): void {{
+    {tick_gate}
     {preamble}
     {hook_do}
     {transitions}
@@ -49,6 +51,7 @@ function state_{c_name}_do(ctx: Context): void {{
     COMPOSITE_OR_TEMPLATE = """
 function state_{c_name}_start(ctx: Context): void {{
     ctx.stateTimers[{state_id}] = ctx.now;
+    ctx.stateEntryTick[{state_id}] = ctx.tickCount;
     {preamble}
     {hook_entry}
     {entry}
@@ -77,6 +80,7 @@ function state_{c_name}_exit(ctx: Context): void {{
 }}
 
 function state_{c_name}_do(ctx: Context): void {{
+    {tick_gate}
     {preamble}
     {hook_do}
     {transitions}
@@ -92,6 +96,7 @@ function state_{c_name}_do(ctx: Context): void {{
     COMPOSITE_AND_TEMPLATE = """
 function state_{c_name}_start(ctx: Context): void {{
     ctx.stateTimers[{state_id}] = ctx.now;
+    ctx.stateEntryTick[{state_id}] = ctx.tickCount;
     {preamble}
     {hook_entry}
     {entry}
@@ -114,12 +119,13 @@ function state_{c_name}_exit(ctx: Context): void {{
 }}
 
 function state_{c_name}_do(ctx: Context): void {{
+    {tick_gate}
     {preamble}
     {hook_do}
     {transitions}
     {do}
 
-    // Safety: Stop if we are exited OR if any transition fired globally
+    // Stop if this orthogonal state was exited (or the machine terminated)
     {safety_check}
 
     {parallel_ticks}
@@ -170,9 +176,15 @@ function inspect_{c_name}(ctx: Context, buf: string[]): void {{
 
     def fmt_safety_check(self, c_name, has_parent):
         if has_parent:
-            return f"if (!ctx.inState_{c_name}() || ctx.transition_fired) {{ return; }}"
+            return f"if (!ctx.inState_{c_name}() || ctx.terminated) {{ return; }}"
         else:
-            return f"if (ctx.transition_fired) {{ return; }}"
+            return f"if (ctx.terminated) {{ return; }}"
+
+    def fmt_tick_gate(self, state_id):
+        return f"if (ctx.stateEntryTick[{state_id}] === ctx.tickCount) {{ return; }}"
+
+    def fmt_entered_before_tick(self, state_id):
+        return f"(ctx.stateEntryTick[{state_id}] !== ctx.tickCount)"
 
     def fmt_guard_expand(self, guard_str):
         return re.sub(r'IN_STATE\(([\w_]+)\)', r'ctx.inState_\1()', guard_str)
@@ -242,6 +254,8 @@ class Context {{
     owner: any = null;
     now: number = 0;
     stateTimers: number[] = new Array(TOTAL_STATES).fill(0);
+    tickCount: number = 0;
+    stateEntryTick: number[] = new Array(TOTAL_STATES).fill(0);
     transition_fired: boolean = false;
     terminated: boolean = false;
 
@@ -281,6 +295,7 @@ class StateMachine {{
 
     tick(): void {{
         this.ctx.transition_fired = false;
+        this.ctx.tickCount++;
         if (this.root !== null) {{
             this.root(this.ctx);
             if (this.ctx.terminated) {{

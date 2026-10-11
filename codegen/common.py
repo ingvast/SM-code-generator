@@ -148,7 +148,10 @@ def get_lca_index(source_path, target_path):
         if source_path[lca_index] != target_path[lca_index]:
             break
         lca_index += 1
-    if lca_index == len(source_path) and lca_index == len(target_path):
+    # Target is the source itself (`.`) or one of its ancestors (e.g. B2 -> /A
+    # from inside A): the target must be exited and re-entered, so the LCA is
+    # the target's parent rather than the target.
+    if lca_index == len(target_path):
         lca_index -= 1
     return lca_index
 

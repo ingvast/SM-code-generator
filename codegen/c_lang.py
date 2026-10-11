@@ -7,6 +7,7 @@ HEADER = """
 #define STATEMACHINE_H
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
 
 #define TOTAL_STATES %d
@@ -21,6 +22,8 @@ struct SM_Context {
     void* owner;
     double now;
     double state_timers[TOTAL_STATES];
+    uint64_t tick_count;
+    uint64_t state_entry_tick[TOTAL_STATES];
     bool transition_fired;
     bool terminated;
 
@@ -79,6 +82,7 @@ class CGenerator(BaseGenerator):
     LEAF_TEMPLATE = """
 void state_{c_name}_start(SM_Context* ctx) {{
     ctx->state_timers[{state_id}] = ctx->now;
+    ctx->state_entry_tick[{state_id}] = ctx->tick_count;
     {preamble}
     {hook_entry}
     {entry}
@@ -97,6 +101,7 @@ void state_{c_name}_exit(SM_Context* ctx) {{
 }}
 
 void state_{c_name}_do(SM_Context* ctx) {{
+    {tick_gate}
     {preamble}
     {hook_do}
     {transitions}
@@ -107,6 +112,7 @@ void state_{c_name}_do(SM_Context* ctx) {{
     COMPOSITE_OR_TEMPLATE = """
 void state_{c_name}_start(SM_Context* ctx) {{
     ctx->state_timers[{state_id}] = ctx->now;
+    ctx->state_entry_tick[{state_id}] = ctx->tick_count;
     {preamble}
     {hook_entry}
     {entry}
@@ -133,6 +139,7 @@ void state_{c_name}_exit(SM_Context* ctx) {{
 }}
 
 void state_{c_name}_do(SM_Context* ctx) {{
+    {tick_gate}
     {preamble}
     {hook_do}
     {transitions}
@@ -146,6 +153,7 @@ void state_{c_name}_do(SM_Context* ctx) {{
     COMPOSITE_AND_TEMPLATE = """
 void state_{c_name}_start(SM_Context* ctx) {{
     ctx->state_timers[{state_id}] = ctx->now;
+    ctx->state_entry_tick[{state_id}] = ctx->tick_count;
     {preamble}
     {hook_entry}
     {entry}
@@ -168,12 +176,13 @@ void state_{c_name}_exit(SM_Context* ctx) {{
 }}
 
 void state_{c_name}_do(SM_Context* ctx) {{
+    {tick_gate}
     {preamble}
     {hook_do}
     {transitions}
     {do}
 
-    // Safety: Stop if we are exited OR if any transition fired globally
+    // Stop if this orthogonal state was exited (or the machine terminated)
     {safety_check}
 
     {parallel_ticks}
@@ -225,9 +234,15 @@ void inspect_{c_name}(SM_Context* ctx, char* buf, size_t* off, size_t max) {{
 
     def fmt_safety_check(self, c_name, has_parent):
         if has_parent:
-            return f"if (!IN_STATE_{c_name} || ctx->transition_fired) return;"
+            return f"if (!IN_STATE_{c_name} || ctx->terminated) return;"
         else:
-            return f"if (ctx->transition_fired) return;"
+            return f"if (ctx->terminated) return;"
+
+    def fmt_tick_gate(self, state_id):
+        return f"if (ctx->state_entry_tick[{state_id}] == ctx->tick_count) return;"
+
+    def fmt_entered_before_tick(self, state_id):
+        return f"(ctx->state_entry_tick[{state_id}] != ctx->tick_count)"
 
     def fmt_guard_expand(self, guard_str):
         # In C, IN_STATE(X) expands to the macro IN_STATE_X
@@ -293,6 +308,7 @@ void sm_init(StateMachine* sm) {{
 }}
 void sm_tick(StateMachine* sm) {{
     sm->ctx.transition_fired = false;
+    sm->ctx.tick_count++;
     if (sm->root) {{
         sm->root(&sm->ctx);
         if (sm->ctx.terminated) {{

@@ -1,0 +1,51 @@
+SM-builder-version: "0.6.0"
+language: python
+
+# An AND join must not count a source that was entered earlier in the same
+# tick by another region: that source has not had its turn yet.
+#
+# Tick 1: RegA takes SA0 -> SA (SA is a join source). RegB then runs; SB's
+# unguarded join edge sees SA active, but SA was entered this tick, so the
+# join waits. Tick 2: SA's join edge fires (SB has been active for a while).
+# The join tick is therefore independent of the regions' declaration order.
+
+context: |
+    step: int
+
+context_init: |
+    ctx.step = 0
+
+hooks:
+  transition: |
+    print(f"{ctx.step:02d}: {t_src} -> {t_dst}")
+
+initial: Parallel
+
+states:
+  Parallel:
+    orthogonal: true
+    ands:
+      J:
+        - to: /Joined
+    states:
+      RegA:
+        initial: SA0
+        states:
+          SA0:
+            transitions:
+              - guard: ctx.step == 1
+                to: SA
+          SA:
+            transitions:
+              - to: "../../@J"
+      RegB:
+        initial: SB
+        states:
+          SB:
+            transitions:
+              - to: "../../@J"
+
+  Joined:
+    transitions:
+      - guard: ctx.step == 4
+        to: null

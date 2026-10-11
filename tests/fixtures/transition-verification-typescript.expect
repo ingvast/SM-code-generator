@@ -38,6 +38,7 @@ First transiton
 04: Transition from /run/c/d to /run
 04: Exit: /run/c/d
 04: Exit: /run/c
+04: Exit: /run
 04: Entry: /run
 04: Entry: /run/a
 05: /run/a
@@ -134,7 +135,12 @@ Testing parallel
 14: Transition from /run/g/a/a to /run/g/a/b
 14: Exit: /run/g/a/a
 14: Entry: /run/g/a/b
-15: /run/g/[a/b,b/c]
+14: Running: /run/g/b
+14: Running: /run/g/b/c
+14: Transition from /run/g/b/c to /run/g/b/a
+14: Exit: /run/g/b/c
+14: Entry: /run/g/b/a
+15: /run/g/[a/b,b/a]
 15: Running: /
 15: Running: /run
 15: Running: /run/g
@@ -143,7 +149,7 @@ Testing parallel
 15: Transition from /run/g/a/b to /run/a
 15: Exit: /run/g/a/b
 15: Exit: /run/g/a
-15: Exit: /run/g/b/c
+15: Exit: /run/g/b/a
 15: Exit: /run/g/b
 15: Exit: /run/g
 15: Entry: /run/a
@@ -178,13 +184,18 @@ Testing parallel
 18: Transition from /run/g/a/a to /run/g/a/b
 18: Exit: /run/g/a/a
 18: Entry: /run/g/a/b
-19: /run/g/[a/b,b/c]
+18: Running: /run/g/b
+18: Running: /run/g/b/c
+18: Transition from /run/g/b/c to /run/g/b/a
+18: Exit: /run/g/b/c
+18: Entry: /run/g/b/a
+19: /run/g/[a/b,b/a]
 19: Running: /
 19: Running: /run
 19: Transition from /run to /run/a
 19: Exit: /run/g/a/b
 19: Exit: /run/g/a
-19: Exit: /run/g/b/c
+19: Exit: /run/g/b/a
 19: Exit: /run/g/b
 19: Exit: /run/g
 19: Entry: /run/a
@@ -232,6 +243,7 @@ Testing parallel
 23: Transition from /run/g/a/b to /run/g/b/c
 23: Exit: /run/g/b/b
 23: Entry: /run/g/b/c
+23: Running: /run/g/b
 24: /run/g/[a/b,b/c]
 24: Running: /
 24: Running: /run

@@ -1,0 +1,25 @@
+00: /P/[X/X1,Y/Y1]
+01: do /
+01: do /P
+01: do /P/X
+01: do /P/X/X1
+01: /P/X/X1 -> /P/X/X2
+01: do /P/Y
+01: do /P/Y/Y1
+01: /P/Y/Y1 -> /P/Y/Y2
+01: /P/[X/X2,Y/Y2]
+02: do /
+02: do /P
+02: do /P/X
+02: do /P/X/X2
+02: /P/X/X2 -> /P/X/X2
+02: do /P/Y
+02: do /P/Y/Y2
+02: /P/[X/X2,Y/Y2]
+03: do /
+03: do /P
+03: do /P/X
+03: do /P/X/X2
+03: /P/X/X2 -> Termination
+03: FINISHED
+done
